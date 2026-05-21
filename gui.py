@@ -555,34 +555,74 @@ class GUI:
         with self as gui:
             gui.window_loop(verbose)
 
-class DataPipeline:
-    def __init__(self, state:GlobalState, server_address='localhost', port=9003):
+class EyeDataGenerator:
+    def __init__(self, state:GlobalState):
         self.state = state
+
+    def generate(self):
+        pass
+
+class FakeEyeDataGenerator(EyeDataGenerator):
+    def __init__(self, state:GlobalState):
+        super().__init__(state)
+        self.t = 0
+
+    def generate(self):
+        while self.state.is_running:
+            left = Point(math.sin(self.t), math.cos(self.t))
+            right = Point(math.sin(self.t + math.pi/4), math.cos(self.t + math.pi/4))
+            pupil_area_left = 1000 + 500 * math.sin(self.t/2)
+            pupil_area_right = 1000 + 500 * math.cos(self.t/2)
+            extra = EyesData.Extra(ints=[int(self.t) % 2, int(self.t/2) % 2])
+            data = EyesData(left=left, right=right, pupil_area=Point(pupil_area_left, pupil_area_right), extra=extra)
+            yield data
+            self.t += 0.1
+            time.sleep(0.1)
+
+class OpenIrisClientGenerator(EyeDataGenerator):
+    def __init__(self, state:GlobalState, server_address='localhost', port=9003):
+        super().__init__(state)
         self.server_address = server_address
         self.port = port
 
-    def run(self, debug=False):
+    def generate(self):
         with OpenIrisClient(self.server_address, self.port) as client:
             while self.state.is_running:
-                data = client.fetch_next_data(debug)
-                self.state.last_eyes_data = data
+                data = client.fetch_next_data()
+                yield data
 
-                left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
-                left_output = self.state.left_cal.transform(left_output)
-                self.state.left_output.write(left_output)
-                
-                right_output = data.right.cr - (data.right.pupil if self.state.right_method == 'pcr' else data.right.p4)
-                right_output = self.state.right_cal.transform(right_output)
-                self.state.right_output.write(right_output)
+class DataPipeline:
+    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003):
+        self.state = state
+        self.server_address = server_address
+        self.port = port
+        self.fake = fake
 
-                pupil_output = Point(data.left.pupil_area, data.right.pupil_area)
-                pupil_output = self.state.pupil_cal.transform(pupil_output)
-                self.state.pupil_output.write(pupil_output)
-                if debug:
-                    print(data)
-                    print(f'{left_output}, {right_output}, {pupil_output}')
+    def run(self, debug=False):
 
-                
+        # create generator
+        if self.fake:
+            generator = FakeEyeDataGenerator(self.state)
+        else:  
+            generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
+            
+        for data in generator.generate():    
+            self.state.last_eyes_data = data
+
+            left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
+            left_output = self.state.left_cal.transform(left_output)
+            self.state.left_output.write(left_output)
+            
+            right_output = data.right.cr - (data.right.pupil if self.state.right_method == 'pcr' else data.right.p4)
+            right_output = self.state.right_cal.transform(right_output)
+            self.state.right_output.write(right_output)
+
+            pupil_output = Point(data.left.pupil_area, data.right.pupil_area)
+            pupil_output = self.state.pupil_cal.transform(pupil_output)
+            self.state.pupil_output.write(pupil_output)
+            if debug:
+                print(data)
+                print(f'{left_output}, {right_output}, {pupil_output}')
 
 if __name__ == "__main__":
     from threading import Thread
@@ -590,11 +630,19 @@ if __name__ == "__main__":
     # Single input argument (optional) is filename to write output to.
     parser = argparse.ArgumentParser()
     parser.add_argument("outfolder", help="Folder to write output to", nargs='?', default=None)
+    parser.add_argument("--fake", help="Use fake data generator instead of OpenIrisClient", action='store_true')
+    parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
+    parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     args = parser.parse_args()
     if args.outfolder:
         print(f'Output will be written to {args.outfolder}')
     else:
         print('Output will be written to default location')
+    if not args.fake:
+        kwargs = {'server_address': args.address, 'port': args.port}
+    else:
+        print('Using fake data generator')
+        kwargs = {}
 
 
     # with GUI() as gui:
@@ -602,7 +650,7 @@ if __name__ == "__main__":
     gs = GlobalState()
     gui_thread = Thread(target=GUI(gs).window_loop, args=(False,))
     gui_thread.start()
-    dp_thread = Thread(target=DataPipeline(gs).run, args=(False,))
+    dp_thread = Thread(target=DataPipeline(gs).run, args=(False,), kwargs=kwargs)
     dp_thread.start()
     dp_thread.join()
     gui_thread.join()
