@@ -1,4 +1,4 @@
-from open_iris_client import OpenIrisClient, Point, EyesData
+from open_iris_client import OpenIrisClient, Point, EyesData, EyeData, ExtraData
 import PySimpleGUI as sg
 import time
 from pathlib import Path
@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import math
 import argparse
 import os
+import pickle
 DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac')
 if DAC_BACKEND == 'dac':
     # default - use local dac.py which supports both AIOUSB and (sort of) NI modules
@@ -562,6 +563,25 @@ class EyeDataGenerator:
     def generate(self):
         pass
 
+
+fake_data = {
+    'Left': {
+        'FrameNumber': 9683, 
+        'Pupil': {
+            'Center': {
+                'X': 347.87344, 
+                'Y': 211.9014
+                }, 
+            'Size': {
+                'Width': 17.5, 
+                'Height': 6.16
+                }
+            }, 
+        'CRs': [{'X': -100, 'Y': -100}, {'X': 820, 'Y': -100}, {'X': 820, 'Y': 820}, {'X': -100, 'Y': 820}]}, 
+        'Right': {'FrameNumber': 0, 'Pupil': {'Center': {'X': 0, 'Y': 0}, 'Size': {'Width': 0, 'Height': 0}}, 'CRs': []}, 
+        'Extra': {'Ints': [12, 0, 0, 0, 0, 0, 0, 0, 0], 'Doubles': [0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+
+
 class FakeEyeDataGenerator(EyeDataGenerator):
     def __init__(self, state:GlobalState):
         super().__init__(state)
@@ -569,14 +589,10 @@ class FakeEyeDataGenerator(EyeDataGenerator):
 
     def generate(self):
         while self.state.is_running:
-            left = Point(math.sin(self.t), math.cos(self.t))
-            right = Point(math.sin(self.t + math.pi/4), math.cos(self.t + math.pi/4))
-            pupil_area_left = 1000 + 500 * math.sin(self.t/2)
-            pupil_area_right = 1000 + 500 * math.cos(self.t/2)
-            extra = EyesData.Extra(ints=[int(self.t) % 2, int(self.t/2) % 2])
-            data = EyesData(left=left, right=right, pupil_area=Point(pupil_area_left, pupil_area_right), extra=extra)
+            fake_data['Left']['FrameNumber'] = self.t
+            data = EyesData(fake_data)
             yield data
-            self.t += 0.1
+            self.t += 1
             time.sleep(0.1)
 
 class OpenIrisClientGenerator(EyeDataGenerator):
@@ -606,9 +622,20 @@ class DataPipeline:
             generator = FakeEyeDataGenerator(self.state)
         else:  
             generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
+
+        # open output file if specified
+        if self.output:
+            output_path = Path(self.output)
+            if not output_path.parent.exists():
+                output_path.parent.mkdir(parents=True)
+            self.output_file = open(output_path, 'wb')
             
         for data in generator.generate():    
             self.state.last_eyes_data = data
+
+            if self.output:
+                pickle.dump(data, self.output_file)
+                print(f'Wrote frame number {data.left.frame_number}')
 
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
             left_output = self.state.left_cal.transform(left_output)
@@ -635,10 +662,12 @@ if __name__ == "__main__":
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     args = parser.parse_args()
-    if args.outfolder:
-        print(f'Output will be written to {args.outfolder}')
-    else:
-        print('Output will be written to default location')
+    if args.output:
+        p=Path(args.output)
+        if not p.parent.exists():
+            p.parent.mkdir(parents=True)
+        if p.exists():
+            print(f'Output file {args.output} already exists and will be overwritten.')
     if not args.fake:
         kwargs = {'server_address': args.address, 'port': args.port}
     else:
