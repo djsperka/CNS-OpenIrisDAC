@@ -1,7 +1,7 @@
 import os
 assert os.name == 'nt', 'DAC only works on Windows'
 import numpy as np
-
+from dac_common import AnalogModule, AnalogOutput, AnalogOutputPair, CalibrationParameters
 has_aio = False
 try:
     import AIOUSB as ao
@@ -29,30 +29,6 @@ def discover_ni_modules():
     system = nidaqmx.system.System.local()
     return system.devices
 
-
-class AnalogModule:
-    def __init__(self):
-        self.name = None
-        self.n_channels = 1
-        self.v_max = 5
-        self.v_min = -5
-        self.v_out = np.zeros(self.n_channels)
-
-    def write_channel(self, channel:int, voltage:float):
-        self.v_out[channel] = voltage
-        pass
-    
-    def write_channels(self, voltage:np.ndarray):
-        """
-        Writes a voltage to a channel. The voltage is clamped to the range [-v_max, v_max].
-        """
-        pass
-
-    def __repr__(self) -> str:
-        return f"AnalogModule(name={self.name}, n_channels={self.n_channels})"
-    
-    def __str__(self) -> str:
-        return self.__repr__()
 
 class NIModule(AnalogModule):
     pass
