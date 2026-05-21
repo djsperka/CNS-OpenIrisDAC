@@ -592,11 +592,12 @@ class OpenIrisClientGenerator(EyeDataGenerator):
                 yield data
 
 class DataPipeline:
-    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003):
+    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str=''):
         self.state = state
         self.server_address = server_address
         self.port = port
         self.fake = fake
+        self.output = output    # TODO - not implemented
 
     def run(self, debug=False):
 
@@ -629,7 +630,7 @@ if __name__ == "__main__":
 
     # Single input argument (optional) is filename to write output to.
     parser = argparse.ArgumentParser()
-    parser.add_argument("outfolder", help="Folder to write output to", nargs='?', default=None)
+    parser.add_argument("--output", help="File to write output to", type=str, default='')
     parser.add_argument("--fake", help="Use fake data generator instead of OpenIrisClient", action='store_true')
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
@@ -650,7 +651,7 @@ if __name__ == "__main__":
     gs = GlobalState()
     gui_thread = Thread(target=GUI(gs).window_loop, args=(False,))
     gui_thread.start()
-    dp_thread = Thread(target=DataPipeline(gs).run, args=(False,), kwargs=kwargs)
+    dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output).run, args=(False,))
     dp_thread.start()
     dp_thread.join()
     gui_thread.join()
