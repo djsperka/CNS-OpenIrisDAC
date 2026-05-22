@@ -635,7 +635,7 @@ class DataPipeline:
 
             if self.output:
                 pickle.dump(data, self.output_file)
-                print(f'Wrote frame number {data.left.frame_number}')
+                #print(f'Wrote frame number {data.left.frame_number}')
 
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
             left_output = self.state.left_cal.transform(left_output)
