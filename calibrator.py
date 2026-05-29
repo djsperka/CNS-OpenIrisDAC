@@ -45,42 +45,58 @@ class CalibratorComm:
         
         Expects initial "HELLO\n" message and responds with "OK\n".
         Then receives and processes commands until client disconnects.
-        Allows gaps of up to 30 seconds between commands.
         """
-        # Set socket timeout to 30 seconds to allow client gaps
-        conn.settimeout(30)
-        
-        # Expect HELLO
-        hello_msg = conn.recv(1024).decode().strip()
-        
+        # Set socket timeout to 1 second and buffer input until newline
+        conn.settimeout(1)
+
+        # Read initial HELLO line (buffer until '\n')
+        recv_buffer = ""
+        hello_msg = None
+        while True:
+            try:
+                data = conn.recv(1024)
+                if not data:
+                    # Client disconnected before HELLO
+                    return
+                recv_buffer += data.decode()
+                if "\n" in recv_buffer:
+                    line, recv_buffer = recv_buffer.split("\n", 1)
+                    hello_msg = line.strip()
+                    break
+            except socket.timeout:
+                # keep waiting for HELLO
+                continue
+
         if hello_msg != "HELLO":
             conn.send(b"ERROR: Expected HELLO\n")
             return
-        
+
         # Send OK response
         conn.send(b"OK\n")
-        
-        # Process commands
+
+        # Process commands: buffer until '\n' then handle full line
         while True:
             try:
-                # Receive command
                 data = conn.recv(1024)
                 if not data:
                     # Client disconnected
                     break
-                
-                # Strip whitespace and newline
-                command = data.decode().strip()
-                
-                # Parse and execute command
-                response = self.parse_command(command)
-                
-                # Send response
-                conn.send((response + "\n").encode())
-            
+
+                recv_buffer += data.decode()
+
+                # Process all complete lines in the buffer
+                while "\n" in recv_buffer:
+                    line, recv_buffer = recv_buffer.split("\n", 1)
+                    command = line.strip()
+
+                    # Parse and execute command
+                    response = self.parse_command(command)
+
+                    # Send response
+                    conn.send((response + "\n").encode())
+
             except socket.timeout:
-                # Timeout while waiting for command; client is idle but connected
-                # Just continue waiting for the next command
+                # Short timeout; loop back to receive more data
                 continue
             except Exception as e:
                 print(f"Error in command handling: {e}")
