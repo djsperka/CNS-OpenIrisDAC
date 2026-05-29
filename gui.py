@@ -643,7 +643,7 @@ class DataPipeline:
                 #print(f'Wrote frame number {data.left.frame_number}')
 
             if self.state.calibrating and self.state.looking_button_down:
-                self.state.calibration_points.append((data.left.cr, data.left.pupil, data.left.p4, data.right.cr, data.right.pupil, data.right.p4)
+                self.state.calibration_points.append((data.left.cr, data.left.pupil, data.left.p4, data.right.cr, data.right.pupil, data.right.p4))
                 print(f'Added calibration point {len(self.state.calibration_points)}: {self.state.calibration_points[-1]}')
 
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
@@ -694,7 +694,7 @@ if __name__ == "__main__":
     # start calibrator server if specified
     calibrator = None
     if args.cal_port:
-        calibrator = CalibratorComm(gs, port=args.cal_port)
+        calibrator = CalibratorComm(args.cal_port, True)
 
     # start data pipeline
     dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output).run, args=(False,))
