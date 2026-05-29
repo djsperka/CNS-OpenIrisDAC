@@ -7,6 +7,7 @@ import math
 import argparse
 import os
 import pickle
+from calibrator import CalibratorComm
 DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac')
 if DAC_BACKEND == 'dac':
     # default - use local dac.py which supports both AIOUSB and (sort of) NI modules
@@ -45,6 +46,10 @@ class GlobalState:
 
         self.last_eyes_data = EyesData()
         self.is_running = True
+
+        self.calibrating = False
+        self.calibration_points = []
+        self.looking_button_down = False
 
         self.load()
 
@@ -637,6 +642,10 @@ class DataPipeline:
                 pickle.dump(data, self.output_file)
                 #print(f'Wrote frame number {data.left.frame_number}')
 
+            if self.state.calibrating and self.state.looking_button_down:
+                self.state.calibration_points.append((data.left.cr, data.left.pupil, data.left.p4, data.right.cr, data.right.pupil, data.right.p4)
+                print(f'Added calibration point {len(self.state.calibration_points)}: {self.state.calibration_points[-1]}')
+
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
             left_output = self.state.left_cal.transform(left_output)
             self.state.left_output.write(left_output)
@@ -661,6 +670,7 @@ if __name__ == "__main__":
     parser.add_argument("--fake", help="Use fake data generator instead of OpenIrisClient", action='store_true')
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
+    parser.add_argument("--cal-port", help="Port of calibrator server", default=0, type=int)
     args = parser.parse_args()
     if args.output:
         p=Path(args.output)
@@ -680,9 +690,21 @@ if __name__ == "__main__":
     gs = GlobalState()
     gui_thread = Thread(target=GUI(gs).window_loop, args=(False,))
     gui_thread.start()
+
+    # start calibrator server if specified
+    calibrator_thread = None
+    if args.cal_port:
+        calibrator_thread = Thread(target=CalibratorComm(gs, port=args.cal_port).run, args=(False,))
+        calibrator_thread.start()
+
+    # start data pipeline
     dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output).run, args=(False,))
     dp_thread.start()
+
     dp_thread.join()
+    if args.cal_port:
+        calibrator_server.shutdown()
+        calibrator_thread.join()
     gui_thread.join()
     gs.save()
     print('Done')
