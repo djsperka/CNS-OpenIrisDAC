@@ -14,7 +14,9 @@ class CalibratorComm:
         self.server_socket = None
         self.client_socket = None
         self.running = False
-            
+        self.thread = threading.Thread(target=self._run_server)
+        self.thread.start()
+
     def _run_server(self):
         """Run the TCP server loop, accepting and handling connections."""
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -26,7 +28,10 @@ class CalibratorComm:
         try:
             while self.running:
                 # Accept a connection
-                conn, addr = self.server_socket.accept()
+                try:
+                    conn, addr = self.server_socket.accept()
+                except OSError:
+                    break
                 self.client_socket = conn
                 
                 try:
@@ -198,6 +203,8 @@ class CalibratorComm:
                 self.server_socket.close()
                 self.server_socket = None
 
+        if getattr(self, 'thread', None) is not None and self.thread.is_alive():
+            self.thread.join(timeout)
 
     def stop(self):
         """Stop the server."""
