@@ -30,5 +30,6 @@ def main() -> None:
         send_command(sock, "q")
 
 
+
 if __name__ == "__main__":
     main()
