@@ -3,7 +3,7 @@ import threading
 
 
 class CalibratorComm:
-    def __init__(self, port=8282):
+    def __init__(self, port=8282, verbose=False):
         """
         Initialize a TCP communication server for calibrator commands.
         
@@ -16,6 +16,7 @@ class CalibratorComm:
         self.running = False
         self.thread = threading.Thread(target=self._run_server)
         self.thread.start()
+        self.verbose = verbose
 
     def _run_server(self):
         """Run the TCP server loop, accepting and handling connections."""
@@ -33,6 +34,8 @@ class CalibratorComm:
                 except OSError:
                     break
                 self.client_socket = conn
+                if self.verbose:
+                    print(f"Accepted connection from {self.client_socket.getpeername()[0]}")
                 
                 try:
                     self._handle_client(conn)
@@ -42,7 +45,8 @@ class CalibratorComm:
                     conn.close()
                     self.client_socket = None
         finally:
-            self.server_socket.close()
+            if self.server_socket:
+                self.server_socket.close()
     
     def _handle_client(self, conn):
         """
@@ -68,6 +72,8 @@ class CalibratorComm:
                     line, recv_buffer = recv_buffer.split("\n", 1)
                     hello_msg = line.strip()
                     break
+                else:
+                    print(f"partial command {recv_buffer}")
             except socket.timeout:
                 # keep waiting for HELLO
                 continue
@@ -75,6 +81,9 @@ class CalibratorComm:
         if hello_msg != "HELLO":
             conn.send(b"ERROR: Expected HELLO\n")
             return
+        else:
+            if self.verbose:
+                print("Got HELLO from client. Waiting for commands...")
 
         # Send OK response
         conn.send(b"OK\n")
@@ -85,6 +94,8 @@ class CalibratorComm:
                 data = conn.recv(1024)
                 if not data:
                     # Client disconnected
+                    if self.verbose:
+                        print("Client disconnected")
                     break
 
                 recv_buffer += data.decode()
