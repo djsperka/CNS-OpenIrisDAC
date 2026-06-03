@@ -21,7 +21,7 @@ class DIOThread(Thread):
             if status != 0:
                 print(f'Error reading DIO: {status}')
             else:
-                self.state.looking_button_down = (v & 0x1) == 0
+                self.state.diobits = v
 
 
 
