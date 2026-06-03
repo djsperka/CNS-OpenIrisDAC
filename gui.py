@@ -49,7 +49,11 @@ class GlobalState:
 
         self.calibrating = False
         self.calibration_points = []
-        self.diobits = int(0)
+        self.calibration_diobits = int(0)
+        self.calibration_vpdx = 0.0
+        self.calibration_vpdy = 0.0
+        self.calibration_fixation_x = 99999.9
+        self.calibration_fixation_y = 99999.9
 
         self.load()
 
@@ -58,7 +62,7 @@ class GlobalState:
     def button_down(self, button:int):
         if button<0 or button>7:
             raise ValueError(f'Button must be between 0 and 7, got {button}')
-        return self.diobits & (1 << button) != 0
+        return self.calibration_diobits & (1 << button) != 0
 
     def discover_analog_modules(self):
         # TODO Move this to global state (also save serial numbers?)

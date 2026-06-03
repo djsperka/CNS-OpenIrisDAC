@@ -5,7 +5,7 @@ import socket
 
 
 def send_command(sock: socket.socket, command: str) -> str:
-    sock.sendall((command + "\n").encode())
+    sock.sendall((command + ";").encode())
     response = sock.recv(1024).decode().strip()
     print(f"Sent: {command!r} -> Received: {response!r}")
     return response
@@ -17,11 +17,12 @@ def main() -> None:
 
     print(f"Connecting to {host}:{port}")
     with socket.create_connection((host, port), timeout=5) as sock:
-        sock.sendall(b"HELLO\n")
-        hello_resp = sock.recv(1024).decode().strip()
-        print(f"HELLO response: {hello_resp!r}")
+        # sock.sendall(b"HELLO;")
+        # hello_resp = sock.recv(1024).decode().strip()
+        # print(f"HELLO response: {hello_resp!r}")
+        hello_resp = send_command(sock, "HELLO")
 
-        if hello_resp != "OK":
+        if hello_resp != "OK;":
             print("Server did not accept HELLO, exiting.")
             return
 

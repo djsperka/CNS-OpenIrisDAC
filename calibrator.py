@@ -1,24 +1,26 @@
 import socket
 import threading
-
+from gui import GlobalState
+from shared_resources import in_cal_lock
 
 class CalibratorComm:
-    def __init__(self, port=8282, verbose=False):
+    def __init__(self, state: GlobalState, port=8282, verbose=False):
         """
         Initialize a TCP communication server for calibrator commands.
         
         Args:
+            state (GlobalState): The global state instance.
             port (int): TCP port to listen on. Defaults to 8282.
         """
+        self.state = state
         self.port = port
         self.server_socket = None
         self.client_socket = None
         self.running = False
-        self.thread = threading.Thread(target=self._run_server)
-        self.thread.start()
+        self.thread = threading.Thread()
         self.verbose = verbose
 
-    def _run_server(self):
+    def run(self):
         """Run the TCP server loop, accepting and handling connections."""
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -68,8 +70,8 @@ class CalibratorComm:
                     # Client disconnected before HELLO
                     return
                 recv_buffer += data.decode()
-                if "\n" in recv_buffer:
-                    line, recv_buffer = recv_buffer.split("\n", 1)
+                if ";" in recv_buffer:
+                    line, recv_buffer = recv_buffer.split(";", 1)
                     hello_msg = line.strip()
                     break
                 else:
@@ -79,16 +81,16 @@ class CalibratorComm:
                 continue
 
         if hello_msg != "HELLO":
-            conn.send(b"ERROR: Expected HELLO\n")
+            conn.send(b"ERROR: Expected HELLO;")
             return
         else:
             if self.verbose:
                 print("Got HELLO from client. Waiting for commands...")
 
         # Send OK response
-        conn.send(b"OK\n")
+        conn.send(b"OK;")
 
-        # Process commands: buffer until '\n' then handle full line
+        # Process commands: buffer until ';' then handle full line
         while True:
             try:
                 data = conn.recv(1024)
@@ -101,15 +103,15 @@ class CalibratorComm:
                 recv_buffer += data.decode()
 
                 # Process all complete lines in the buffer
-                while "\n" in recv_buffer:
-                    line, recv_buffer = recv_buffer.split("\n", 1)
+                while ";" in recv_buffer:
+                    line, recv_buffer = recv_buffer.split(";", 1)
                     command = line.strip()
 
                     # Parse and execute command
                     response = self.parse_command(command)
 
                     # Send response
-                    conn.send((response + "\n").encode())
+                    conn.send((response + ";").encode())
 
             except socket.timeout:
                 # Short timeout; loop back to receive more data
@@ -152,14 +154,15 @@ class CalibratorComm:
                 x = float(fields[0])
                 y = float(fields[1])
                 d = float(fields[2])
+                c = fields[3]
             except ValueError:
-                return "ERROR: x, y, and d must be numbers"
-
-            c = fields[3]
-
-            # TODO: Implement F command handling for x, y, d, c
+                return "ERROR: x, y, and d must be numbers"            
             print(f"Received F command with x={x}, y={y}, d={d}, c={c}")
             response = 'OK'
+            with in_cal_lock:
+                self.state.calibration_fixation_x = x
+                self.state.calibration_fixation_y = y
+
         elif command.startswith("V "):
             # Handle 'V' command with two numeric values separated by a comma
             parts = command.split(maxsplit=1)
@@ -182,6 +185,10 @@ class CalibratorComm:
             # TODO: Implement V command handling for vpdx and vpdy
             print(f"Received V command with vpdx={vpdx}, vpdy={vpdy}")
             response = 'OK'
+            with in_cal_lock:
+                self.state.calibration_vpdx = vpdx
+                self.state.calibration_vpdy = vpdy
+
         else:
             response = "ERROR: Unknown command"
         
@@ -220,3 +227,15 @@ class CalibratorComm:
     def stop(self):
         """Stop the server."""
         self.shutdown()
+
+
+
+if __name__ == "__main__":
+    calibrator = CalibratorComm(verbose=True)
+    try:
+        calibrator.run()
+    except KeyboardInterrupt:
+        print("Interrupted by user")
+    finally:
+        calibrator.stop()
+    
