@@ -1,6 +1,6 @@
 import socket
 import threading
-from gui import GlobalState
+from globalstate import GlobalState
 from shared_resources import in_cal_lock
 
 class CalibratorComm:
