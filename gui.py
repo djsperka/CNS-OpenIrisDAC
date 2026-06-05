@@ -1,5 +1,5 @@
 from open_iris_client import OpenIrisClient, Point, EyesData, EyeData, ExtraData
-#from calibrator import CalibratorComm
+from calibrator import CalibratorComm
 import PySimpleGUI as sg
 import time
 from pathlib import Path
