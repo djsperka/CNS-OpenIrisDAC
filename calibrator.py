@@ -231,11 +231,14 @@ class CalibratorComm:
 
 
 if __name__ == "__main__":
-    calibrator = CalibratorComm(verbose=True)
+    state = GlobalState()
+    from threading import Thread
+    calibrator_thread = Thread(target=CalibratorComm(state, port=8282, verbose=True).run)
     try:
-        calibrator.run()
+        calibrator_thread.start()
+        calibrator_thread.join()
     except KeyboardInterrupt:
         print("Interrupted by user")
     finally:
-        calibrator.stop()
+        calibrator_thread.stop()
     
