@@ -1,9 +1,9 @@
 import socket
-import threading
+from threading import Thread
 from globalstate import GlobalState
 from shared_resources import in_cal_lock
 
-class CalibratorComm:
+class CalibratorComm(Thread):
     def __init__(self, state: GlobalState, port=8282, verbose=False):
         """
         Initialize a TCP communication server for calibrator commands.
@@ -12,12 +12,12 @@ class CalibratorComm:
             state (GlobalState): The global state instance.
             port (int): TCP port to listen on. Defaults to 8282.
         """
+        super().__init__()
         self.state = state
         self.port = port
         self.server_socket = None
         self.client_socket = None
         self.running = False
-        self.thread = threading.Thread()
         self.verbose = verbose
 
     def run(self):
@@ -194,11 +194,8 @@ class CalibratorComm:
         
         return response if response is not None else ""
     
-    def shutdown(self, timeout: float = 1.0):
+    def shutdown(self):
         """Shutdown the server and disconnect any client.
-
-        Args:
-            timeout (float): Seconds to wait for the background thread to stop.
         """
         print("Shutting down calibrator server...")
         self.running = False
@@ -221,8 +218,6 @@ class CalibratorComm:
                 self.server_socket.close()
                 self.server_socket = None
 
-        if getattr(self, 'thread', None) is not None and self.thread.is_alive():
-            self.thread.join(timeout)
 
     def stop(self):
         """Stop the server."""
@@ -232,8 +227,7 @@ class CalibratorComm:
 
 if __name__ == "__main__":
     state = GlobalState()
-    from threading import Thread
-    calibrator_thread = Thread(target=CalibratorComm(state, port=8282, verbose=True).run)
+    calibrator_thread = CalibratorComm(state, port=8282, verbose=True)
     try:
         calibrator_thread.start()
         calibrator_thread.join()

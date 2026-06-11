@@ -593,9 +593,10 @@ if __name__ == "__main__":
     gui_thread.start()
 
     # start calibrator server if specified
-    calibrator = None
+    calibrator_thread = None
     if args.cal_port:
-        calibrator = CalibratorComm(args.cal_port, True)
+        calibrator_thread = CalibratorComm(gs, port=args.cal_port, verbose=True)
+        calibrator_thread.start()
 
     # start data pipeline
     dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output).run, args=(False,))
@@ -603,7 +604,7 @@ if __name__ == "__main__":
 
     dp_thread.join()
     if args.cal_port:
-        calibrator.shutdown()   # shutdown() will call join() on the calibrator thread
+        calibrator_thread.shutdown()   # shutdown() will call join() on the calibrator thread
     gui_thread.join()
     gs.save()
     print('Done')
