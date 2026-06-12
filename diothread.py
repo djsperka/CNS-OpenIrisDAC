@@ -21,7 +21,7 @@ class DIOThread(Thread):
             if status != 0:
                 print(f'Error reading DIO: {status}')
             else:
-                self.state.diobits = v
+                self.state.calibration_diobits = v
 
 
 

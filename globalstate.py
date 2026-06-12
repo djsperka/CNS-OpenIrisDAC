@@ -40,7 +40,6 @@ class GlobalState:
         self.is_running = True
 
         self.calibrating = False
-        self.calibration_points = []
         self.calibration_diobits = int(0)
         self.calibration_vpdx = 0.0
         self.calibration_vpdy = 0.0
