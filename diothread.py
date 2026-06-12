@@ -1,7 +1,7 @@
 from threading import Thread, Event
 from AIOUSB import diOnly, DIO_Read8
 from shared_resources import ao_lock
-from gui import GlobalState
+from globalstate import GlobalState
 
 # Source - https://stackoverflow.com/a/12435256
 # Posted by Hans Then, modified by community. See post 'Timeline' for change history
