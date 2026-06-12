@@ -1,3 +1,5 @@
+from diothread import DIOThread
+from threading import Thread, Event
 from open_iris_client import OpenIrisClient, Point, EyesData, EyeData, ExtraData
 from calibrator import CalibratorComm
 import PySimpleGUI as sg
@@ -537,15 +539,15 @@ class DataPipeline:
             self.output_file = open(output_path, 'wb')
             
         for data in generator.generate():    
+            if self.state.calibrating:
+                # assign dio bits to data.extra.ints[8] 
+                data.extra.ints[8] = self.state.calibration_diobits
+
             self.state.last_eyes_data = data
 
             if self.output:
                 pickle.dump(data, self.output_file)
                 #print(f'Wrote frame number {data.left.frame_number}')
-
-            if self.state.calibrating and self.state.looking_button_down:
-                self.state.calibration_points.append((data.left.cr, data.left.pupil, data.left.p4, data.right.cr, data.right.pupil, data.right.p4))
-                print(f'Added calibration point {len(self.state.calibration_points)}: {self.state.calibration_points[-1]}')
 
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
             left_output = self.state.left_cal.transform(left_output)
@@ -594,9 +596,15 @@ if __name__ == "__main__":
 
     # start calibrator server if specified
     calibrator_thread = None
+    dio_thread = None
+    dio_stop_event = None
     if args.cal_port:
         calibrator_thread = CalibratorComm(gs, port=args.cal_port, verbose=True)
         calibrator_thread.start()
+        dio_stop_event = Event()
+        dio_thread = DIOThread(dio_stop_event, gs)
+        dio_thread.start()
+        gs.calibrating = True
 
     # start data pipeline
     dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output).run, args=(False,))
@@ -605,6 +613,9 @@ if __name__ == "__main__":
     dp_thread.join()
     if args.cal_port:
         calibrator_thread.shutdown()   # shutdown() will call join() on the calibrator thread
+    if dio_thread:
+        dio_stop_event.set()
+        dio_thread.join()
     gui_thread.join()
     gs.save()
     print('Done')
