@@ -542,6 +542,10 @@ class DataPipeline:
             if self.state.calibrating:
                 # assign dio bits to data.extra.ints[8] 
                 data.extra.ints[8] = self.state.calibration_diobits
+                data.extra.doubles[5] = self.state.calibration_vpdx
+                data.extra.doubles[6] = self.state.calibration_vpdy
+                data.extra.doubles[7] = self.state.calibration_fixation_x
+                data.extra.doubles[8] = self.state.calibration_fixation_y
 
             self.state.last_eyes_data = data
 
