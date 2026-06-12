@@ -116,8 +116,13 @@ class CalibratorComm(Thread):
             except socket.timeout:
                 # Short timeout; loop back to receive more data
                 continue
+            except ConnectionResetError:
+                print(f"Connection was reset by peer. Shutting down.")
+                break
+
             except Exception as e:
                 print(f"Error in command handling: {e}")
+                print(f"{e.__class__}")
                 break
     
     def parse_command(self, command: str) -> str:
