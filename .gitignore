@@ -4,3 +4,4 @@ cals/**
 build
 dist
 *.spec
+*.pkl
