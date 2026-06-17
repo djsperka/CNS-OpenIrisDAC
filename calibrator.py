@@ -140,9 +140,13 @@ class CalibratorComm(Thread):
         Returns:
             str: The response to send to the client
         """
-        if command == "q":
-            # Handle 'q' command
-            # TODO: Implement query command
+        if command == "Q":
+            with in_cal_lock:
+                self.state.calibrating = False
+            response = 'OK'
+        elif command == "CALIBRATE":
+            with in_cal_lock:
+                self.state.calibrating = True
             response = 'OK'
         elif command.startswith("F "):
             # Handle 'F' command with a single argument formatted as "x,y,d,c"
