@@ -45,6 +45,7 @@ class GlobalState:
         self.calibration_vpdy = 0.0
         self.calibration_fixation_x = 99999.9
         self.calibration_fixation_y = 99999.9
+        self.calibration_recording = False
 
         self.load()
 
