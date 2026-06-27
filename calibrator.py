@@ -18,6 +18,7 @@ class CalibratorComm(Thread):
         self.server_socket = None
         self.client_socket = None
         self.running = False
+        self.recording = False
         self.verbose = verbose
 
     def run(self):
@@ -32,6 +33,7 @@ class CalibratorComm(Thread):
             while self.running:
                 # Accept a connection
                 try:
+                    print("calibrator: waiting for client...")
                     conn, addr = self.server_socket.accept()
                 except OSError:
                     break
@@ -75,7 +77,7 @@ class CalibratorComm(Thread):
                     hello_msg = line.strip()
                     break
                 else:
-                    print(f"partial command {recv_buffer}")
+                    print(f"calibrator: partial command {recv_buffer}")
             except socket.timeout:
                 # keep waiting for HELLO
                 continue
@@ -99,6 +101,8 @@ class CalibratorComm(Thread):
                     if self.verbose:
                         print("Client disconnected")
                     break
+                else:
+                    print(f"received {len(data.decode())} bytes: {data.decode()}")
 
                 recv_buffer += data.decode()
 
@@ -117,7 +121,7 @@ class CalibratorComm(Thread):
                 # Short timeout; loop back to receive more data
                 continue
             except ConnectionResetError:
-                print(f"Connection was reset by peer. Shutting down.")
+                print(f"Connection to calibrator was closed.")
                 break
 
             except Exception as e:
@@ -140,10 +144,12 @@ class CalibratorComm(Thread):
         Returns:
             str: The response to send to the client
         """
-        if command == "q":
-            # Handle 'q' command
-            # TODO: Implement query command
+        if command.lower().startswith("record"):
+            self.state.calibration_recording = True
             response = 'OK'
+        if command.lower().startswith("stoprecording"):
+            self.state.calibration_recording = False
+            response = 'OK'        
         elif command.startswith("F "):
             # Handle 'F' command with a single argument formatted as "x,y,d,c"
             parts = command.split(maxsplit=1)
