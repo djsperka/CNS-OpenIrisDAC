@@ -11,13 +11,12 @@ class SerialMonitor:
 
     def run(self):
         # open port or fail
-        self.ser = Serial(self.comport, self.baudrate)
+        self.ser = Serial(self.comport, baudrate=self.baudrate, timeout=0.01)
         while self.state.is_running:
             # check if anything waiting to be read
             while self.ser.in_waiting:
-                self.ser.readline() # TODO termination? 
-
-                # parse what we just read
+                s=self.ser.readline()
+                print("Got input {s}")
 
             # chill
             sleep(.05)
@@ -25,4 +24,3 @@ class SerialMonitor:
     def __del__(self):
         if self.ser and self.ser.is_open:
             self.ser.close()
-            
