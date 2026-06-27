@@ -515,13 +515,15 @@ class OpenIrisClientGenerator(EyeDataGenerator):
                 data = client.fetch_next_data()
                 yield data
 
+
 class DataPipeline:
     def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str=''):
         self.state = state
         self.server_address = server_address
         self.port = port
         self.fake = fake
-        self.output = output    # TODO - not implemented
+        self.output = output
+        self.output_file = None
 
     def run(self, debug=False):
 
@@ -531,12 +533,12 @@ class DataPipeline:
         else:  
             generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
 
-        # open output file if specified
-        if self.output:
-            output_path = Path(self.output)
-            if not output_path.parent.exists():
-                output_path.parent.mkdir(parents=True)
-            self.output_file = open(output_path, 'wb')
+        # # open output file if specified
+        # if self.output and self.state.:
+        #     output_path = Path(self.output)
+        #     if not output_path.parent.exists():
+        #         output_path.parent.mkdir(parents=True)
+        #     self.output_file = open(output_path, 'wb')
             
         for data in generator.generate():    
             if self.state.calibrating:
@@ -550,7 +552,22 @@ class DataPipeline:
             self.state.last_eyes_data = data
 
             if self.output:
-                pickle.dump(data, self.output_file)
+                if self.state.calibration_recording:
+                    if not self.output_file:
+                        output_path = Path(self.output)
+                        if not output_path.parent.exists():
+                            output_path.parent.mkdir(parents=True)
+                        self.output_file = open(output_path, 'wb')
+                        print(f"calibrator opened output file {self.output}")
+                    pickle.dump(data, self.output_file)
+                else:
+                    # check if file needs to be closed
+                    if self.output_file:
+                        self.output_file.close()
+                        self.output_file = None
+                        print(f"calibrator closed output file {self.output}")
+
+
                 #print(f'Wrote frame number {data.left.frame_number}')
 
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
