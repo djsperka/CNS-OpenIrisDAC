@@ -2,6 +2,7 @@ from globalstate import GlobalState
 from open_iris_client import OpenIrisClient, EyesData
 import time
 import pickle
+import math
 
 class EyeDataGenerator:
     def __init__(self, state:GlobalState):
@@ -37,10 +38,19 @@ class FakeEyeDataGenerator(EyeDataGenerator):
     def generate(self):
         while self.state.is_running:
             fake_data['Left']['FrameNumber'] = self.t
+
+            t = self.t*math.pi/500
+            r = 15
+            fake_data['Left']['Pupil']['Center']['X'] = 0
+            fake_data['Left']['Pupil']['Center']['Y'] = 0
+            fake_data['Left']['CRs'][0]['X'] = r*math.cos(t)
+            fake_data['Left']['CRs'][0]['Y'] = r*math.sin(t)
+
+
             data = EyesData(fake_data)
             yield data
             self.t += 1
-            time.sleep(0.1)
+            time.sleep(0.02)
 
 class OpenIrisClientGenerator(EyeDataGenerator):
     def __init__(self, state:GlobalState, server_address='localhost', port=9003):
