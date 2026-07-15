@@ -109,15 +109,17 @@ class GUI:
                 ])
         
         field_size = (40,1)
-        self.bias_factor = 5e0
 
-        self.gain_factor = 1.3e-4
+        # DJS - changing gain, bias factor to 1
+        self.bias_factor = 1
+
+        self.gain_factor = 1
         b_min = -100
         b_max = 100
         b_res = .2
         g_min = 0
-        g_max = 500
-        g_res = .5
+        g_max = 10
+        g_res = .1
         self.lbx = GUIField(
             'X Bias', 'left_x_bias', field_size,
             self.state.left_cal, 'x_bias', gain_factor=self.bias_factor,
