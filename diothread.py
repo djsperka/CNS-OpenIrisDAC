@@ -1,7 +1,17 @@
 from threading import Thread, Event
-from AIOUSB import diOnly, DIO_Read8
 from shared_resources import ao_lock
 from globalstate import GlobalState
+import os
+
+DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac')
+if DAC_BACKEND == 'dac':
+    # default - use local dac.py which supports both AIOUSB and (sort of) NI modules
+    from AIOUSB import diOnly, DIO_Read8
+elif DAC_BACKEND == 'nodac':
+    from nodac import diOnly, DIO_Read8
+else:
+    raise RuntimeError(f'Cannot import dac module using DAC_BACKEND={DAC_BACKEND}. Expecting "dac" or "nodac".')
+
 
 # Source - https://stackoverflow.com/a/12435256
 # Posted by Hans Then, modified by community. See post 'Timeline' for change history
