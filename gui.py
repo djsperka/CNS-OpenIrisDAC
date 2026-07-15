@@ -12,6 +12,7 @@ import os
 import pickle
 from dac_common import AnalogOutput, AnalogOutputPair
 from globalstate import GlobalState
+from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
 
 from typing import Callable
 class GUIField:
@@ -109,6 +110,7 @@ class GUI:
         
         field_size = (40,1)
         self.bias_factor = 5e0
+
         self.gain_factor = 1.3e-4
         b_min = -100
         b_max = 100
@@ -464,56 +466,6 @@ class GUI:
         with self as gui:
             gui.window_loop(verbose)
 
-class EyeDataGenerator:
-    def __init__(self, state:GlobalState):
-        self.state = state
-
-    def generate(self):
-        pass
-
-
-fake_data = {
-    'Left': {
-        'FrameNumber': 9683, 
-        'Pupil': {
-            'Center': {
-                'X': 347.87344, 
-                'Y': 211.9014
-                }, 
-            'Size': {
-                'Width': 17.5, 
-                'Height': 6.16
-                }
-            }, 
-        'CRs': [{'X': -100, 'Y': -100}, {'X': 820, 'Y': -100}, {'X': 820, 'Y': 820}, {'X': -100, 'Y': 820}]}, 
-        'Right': {'FrameNumber': 0, 'Pupil': {'Center': {'X': 0, 'Y': 0}, 'Size': {'Width': 0, 'Height': 0}}, 'CRs': []}, 
-        'Extra': {'Ints': [12, 0, 0, 0, 0, 0, 0, 0, 0], 'Doubles': [0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-
-
-class FakeEyeDataGenerator(EyeDataGenerator):
-    def __init__(self, state:GlobalState):
-        super().__init__(state)
-        self.t = 0
-
-    def generate(self):
-        while self.state.is_running:
-            fake_data['Left']['FrameNumber'] = self.t
-            data = EyesData(fake_data)
-            yield data
-            self.t += 1
-            time.sleep(0.1)
-
-class OpenIrisClientGenerator(EyeDataGenerator):
-    def __init__(self, state:GlobalState, server_address='localhost', port=9003):
-        super().__init__(state)
-        self.server_address = server_address
-        self.port = port
-
-    def generate(self):
-        with OpenIrisClient(self.server_address, self.port) as client:
-            while self.state.is_running:
-                data = client.fetch_next_data()
-                yield data
 
 
 class DataPipeline:
@@ -533,13 +485,6 @@ class DataPipeline:
         else:  
             generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
 
-        # # open output file if specified
-        # if self.output and self.state.:
-        #     output_path = Path(self.output)
-        #     if not output_path.parent.exists():
-        #         output_path.parent.mkdir(parents=True)
-        #     self.output_file = open(output_path, 'wb')
-            
         for data in generator.generate():    
             if self.state.calibrating:
                 # assign dio bits to data.extra.ints[8] 
@@ -570,6 +515,7 @@ class DataPipeline:
 
                 #print(f'Wrote frame number {data.left.frame_number}')
 
+            print(f"left_cal.gain {self.state.left_cal.x_gain}, {self.state.left_cal.y_gain}")
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
             left_output = self.state.left_cal.transform(left_output)
             self.state.left_output.write(left_output)
