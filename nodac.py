@@ -2,6 +2,13 @@
 import numpy as np
 from dac_common import AnalogModule, AnalogOutput, AnalogOutputPair, CalibrationParameters
 
+
+# These are to replace AIO calls in diothread
+diOnly = 1
+def DIO_Read8():
+    return 0,0
+
+
 class FakeModule:
     def __init__(self, verbose:bool=False):
         self.name = 'FakeModule'
