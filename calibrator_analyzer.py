@@ -108,7 +108,8 @@ class CalibratorThread(Thread):
                     cal.step(self.globalstate.calibration_queue.get())
                 else:
                     time.sleep(0.1)
-        logger.info("Thread ending.")
+            logger.info(f"stopnow is set:  crsig shape is {np.shape(cal.get_crsig())}")
+        logger.info(f"Thread ending.")
 
 
 class CalibratorAnalyzer():
