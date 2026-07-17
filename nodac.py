@@ -5,7 +5,7 @@ from dac_common import AnalogModule, AnalogOutput, AnalogOutputPair, Calibration
 
 # These are to replace AIO calls in diothread
 diOnly = 1
-def DIO_Read8():
+def DIO_Read8(i, j):
     return 0,0
 
 
