@@ -2,6 +2,7 @@ from pathlib import Path
 from dac_common import CalibrationParameters, AnalogOutputPair, AnalogOutput
 from open_iris_client import EyesData
 import os
+from queue import Queue
 
 DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac')
 if DAC_BACKEND == 'dac':
@@ -39,6 +40,9 @@ class GlobalState:
         self.last_eyes_data = EyesData()
         self.is_running = True
 
+        # this stuff for calibration
+
+        # Watch this - when True pass EyesData to calibration
         self.calibrating = False
         self.calibration_diobits = int(0)
         self.calibration_vpdx = 0.0
@@ -46,6 +50,17 @@ class GlobalState:
         self.calibration_fixation_x = 99999.9
         self.calibration_fixation_y = 99999.9
         self.calibration_recording = False
+
+        # these are parameters for the calibration analysis. 
+        # TODO - add these to a settings file, and to GUI
+        self.calibration_fps:int=500
+        self.calibration_initial_size_sec:int=1800
+        self.calibration_increase_step_sec:int = 300
+        self.calibration_before_sec:float=0.1
+        self.calibration_after_sec:float=0.1
+        self.calibration_vmax_px_per_sec:float=5000
+        self.calibration_doplot:bool=True
+        self.calibration_queue:Queue=Queue()
 
         self.load()
 

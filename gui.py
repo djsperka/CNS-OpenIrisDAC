@@ -1,7 +1,8 @@
 from diothread import DIOThread
 from threading import Thread, Event
 from open_iris_client import OpenIrisClient, Point, EyesData, EyeData, ExtraData
-from calibrator import CalibratorComm
+from calibrator_comm import CalibratorComm
+from calibrator_analyzer import CalibratorThread
 import PySimpleGUI as sg
 import time
 from pathlib import Path
@@ -13,8 +14,11 @@ import pickle
 from dac_common import AnalogOutput, AnalogOutputPair
 from globalstate import GlobalState
 from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
-
+import logging
 from typing import Callable
+
+logger = logging.getLogger(__name__)
+
 class GUIField:
     def __init__(self, title:str, key:str, size:tuple, obj:object, field:str, gain_factor:float=1, increment:float=1, multiplicative:bool=False,
                 slider_enabled:bool=False, slider_minimum:float=-100, slider_maximum:float=100, slider_resolution:float=1, 
@@ -343,7 +347,7 @@ class GUI:
                 self.update_output_channels()
                 first = False
             if verbose and event != sg.TIMEOUT_EVENT:
-                print(event, values)
+                logger.info(event, values)
 
             # handle exit
             if event == sg.WIN_CLOSED or event == 'Close' or event == 'Exit':
@@ -488,6 +492,8 @@ class DataPipeline:
             generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
 
         for data in generator.generate():    
+            self.state.last_eyes_data = data
+
             if self.state.calibrating:
                 # assign dio bits to data.extra.ints[8] 
                 data.extra.ints[8] = self.state.calibration_diobits
@@ -495,8 +501,7 @@ class DataPipeline:
                 data.extra.doubles[6] = self.state.calibration_vpdy
                 data.extra.doubles[7] = self.state.calibration_fixation_x
                 data.extra.doubles[8] = self.state.calibration_fixation_y
-
-            self.state.last_eyes_data = data
+                self.state.calibration_queue.put(data)
 
             if self.output:
                 if self.state.calibration_recording:
@@ -505,19 +510,18 @@ class DataPipeline:
                         if not output_path.parent.exists():
                             output_path.parent.mkdir(parents=True)
                         self.output_file = open(output_path, 'wb')
-                        print(f"calibrator opened output file {self.output}")
+                        logger.info(f"calibrator opened output file {self.output}")
                     pickle.dump(data, self.output_file)
                 else:
                     # check if file needs to be closed
                     if self.output_file:
                         self.output_file.close()
                         self.output_file = None
-                        print(f"calibrator closed output file {self.output}")
+                        logger.info(f"calibrator closed output file {self.output}")
 
 
                 #print(f'Wrote frame number {data.left.frame_number}')
 
-            print(f"left_cal.gain {self.state.left_cal.x_gain}, {self.state.left_cal.y_gain}")
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
             left_output = self.state.left_cal.transform(left_output)
             self.state.left_output.write(left_output)
@@ -536,6 +540,8 @@ class DataPipeline:
 if __name__ == "__main__":
     from threading import Thread
 
+    logging.basicConfig(level=logging.NOTSET)
+
     # Single input argument (optional) is filename to write output to.
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", help="File to write output to", type=str, default='')
@@ -549,11 +555,11 @@ if __name__ == "__main__":
         if not p.parent.exists():
             p.parent.mkdir(parents=True)
         if p.exists():
-            print(f'Output file {args.output} already exists and will be overwritten.')
+            logger.warning(f'Output file {args.output} already exists and will be overwritten.')
     if not args.fake:
         kwargs = {'server_address': args.address, 'port': args.port}
     else:
-        print('Using fake data generator')
+        logger.warning('Using fake data generator')
         kwargs = {}
 
 
@@ -564,16 +570,18 @@ if __name__ == "__main__":
     gui_thread.start()
 
     # start calibrator server if specified
-    calibrator_thread = None
+    calibrator_comm_thread = None
+    calibrator_ana_thread = None
     dio_thread = None
     dio_stop_event = None
     if args.cal_port:
-        calibrator_thread = CalibratorComm(gs, port=args.cal_port, verbose=True)
-        calibrator_thread.start()
+        calibrator_comm_thread = CalibratorComm(gs, port=args.cal_port, verbose=True)
+        calibrator_comm_thread.start()
+        calibrator_ana_thread = CalibratorThread(gs)
+        calibrator_ana_thread.start()
         dio_stop_event = Event()
         dio_thread = DIOThread(dio_stop_event, gs)
         dio_thread.start()
-        gs.calibrating = True
 
     # start data pipeline
     dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output).run, args=(False,))
@@ -581,10 +589,13 @@ if __name__ == "__main__":
 
     dp_thread.join()
     if args.cal_port:
-        calibrator_thread.shutdown()   # shutdown() will call join() on the calibrator thread
+        calibrator_comm_thread.stop()
+        calibrator_comm_thread.join()
+        calibrator_ana_thread.stop()
+        calibrator_ana_thread.join()
     if dio_thread:
         dio_stop_event.set()
         dio_thread.join()
     gui_thread.join()
     gs.save()
-    print('Done')
+    

@@ -12,6 +12,13 @@ from generator import FileEyeDataGenerator
 from matplotlib.backend_bases import MouseButton
 from typing import List
 from collections import defaultdict as defaultdict
+import time
+from threading import Thread
+from queue import Queue
+from globalstate import GlobalState
+import logging
+
+logger = logging.getLogger(__name__)
 
 binding_id = None
 
@@ -59,6 +66,50 @@ class ButtonPressInfo:
     checked: bool
 
 
+class CalibratorThread(Thread):
+    def __init__(self, gs:GlobalState):
+        super().__init__()
+        self.globalstate = gs
+        self._stopnow = False
+
+    def stop(self):
+        self._stopnow = True
+
+    def run(self):
+
+        # loop over this cycle until we're told to stop
+        while True:
+
+            # wait for globalstate to say we're calibrating. 
+            # we could get stopped while waiting, though, so take care of that.
+            while not self.globalstate.calibrating and not self._stopnow:
+                time.sleep(0.1)
+
+            logger.info("Calibrator thread - calibrating")
+            if self._stopnow:
+                break
+
+            # now create calibrator
+            args = {
+                "fps": self.globalstate.calibration_fps,
+                "initial_size_sec": self.globalstate.calibration_initial_size_sec,
+                "increase_step_sec": self.globalstate.calibration_increase_step_sec,
+                "before_sec": self.globalstate.calibration_before_sec,
+                "after_sec": self.globalstate.calibration_after_sec,
+                "vmax_px_per_sec": self.globalstate.calibration_vmax_px_per_sec,
+                "doplot": self.globalstate.calibration_doplot
+            }
+            cal = CalibratorAnalyzer(**args)
+
+            # watch the queue, and watch for stopping
+            logger.info("Calibrator - filling queue...")
+            while not self._stopnow:
+                if not self.globalstate.calibration_queue.empty():
+                    cal.step(self.globalstate.calibration_queue.get())
+                else:
+                    time.sleep(0.1)
+        logger.info("Thread ending.")
+
 
 class CalibratorAnalyzer():
     def __init__(self, fps:int=500, initial_size_sec:int=1800, increase_step_sec:int = 300, before_sec:float=0.1, after_sec:float=0.1, vmax_px_per_sec:float=5000, doplot=True):
@@ -89,11 +140,11 @@ class CalibratorAnalyzer():
         # plotting or not?
         self._doplot = doplot
         self._invalidated = False
-        if self._doplot:
-            plt.ion()
-            self._f, self._axes = plt.subplots(2, 1, figsize=(10,10))
-            self._paths = {}
+        self._f = None
+        self._axes = None
 
+        # when using analyze_loop() as target of a Thread. Append EyeData to this. 
+        self._queue = Queue()
 
     def step(self, ed: EyesData):
         data_ok = True
@@ -147,20 +198,20 @@ class CalibratorAnalyzer():
         return self._counter
 
     def _update_plot(self):
-        if self._doplot and self._invalidated:
-            self._invalidated = False
+        if self._doplot:   # and self._invalidated:
+            if not self._f:
+                self._f, self._axes = plt.subplots(2, 1, figsize=(10,10))
+                self._paths = {}
+                self._invalidated = True
 
-            # re-draw scatter plot(s)
-
-            # Each key in self._meas is a calibration point
-            print("===========================")
-            count = 0
-            for i, (key,pts) in enumerate(self._meas.items()):
-                print(f"{i} {str(key)}: {len(pts)}")
-                xy=np.stack(pts)
-                self._axes[0].scatter(xy[:,0], xy[:,1], color=cm.tab20(i))
-            plt.show()
-            plt.pause(0.1)
+            if self._invalidated:
+                self._invalidated = False
+                count = 0
+                for i, (key,pts) in enumerate(self._meas.items()):
+                    xy=np.stack(pts)
+                    self._axes[0].scatter(xy[:,0], xy[:,1], color=cm.tab20(i))
+                plt.show()
+                plt.pause(0.01)
 
 
     def get_crsig(self, start:None|int=None, stop:None|int=None, step:None|int=None):
@@ -212,63 +263,63 @@ class CalibratorAnalyzer():
 
 
 
-    def ana_cr(self, before_sec:float=0.1, after_sec:float=0.1, vmax_px_per_sec:float=5000,doplot=True):
-        nbefore = int(np.floor(before_sec * self._fps))
-        nafter = int(np.floor(after_sec * self._fps))
-        vmax = vmax_px_per_sec/self._fps
+    # def ana_cr(self, before_sec:float=0.1, after_sec:float=0.1, vmax_px_per_sec:float=5000,doplot=True):
+    #     nbefore = int(np.floor(before_sec * self._fps))
+    #     nafter = int(np.floor(after_sec * self._fps))
+    #     vmax = vmax_px_per_sec/self._fps
 
-        measured_xy_list=[] # tuples of xav,yav,xv,yv for good trials
-        bias_xy_list = []
-        target_xy_list=[]
-        crsig = self.get_crsig()
+    #     measured_xy_list=[] # tuples of xav,yav,xv,yv for good trials
+    #     bias_xy_list = []
+    #     target_xy_list=[]
+    #     crsig = self.get_crsig()
 
-        for (ind,vx,vy,f) in self._button_list:
-            if ind+nafter < self._counter:
-                if np.abs(vx) < 100 and np.abs(vy) < 100 and self._check_velocity(crsig,ind,nbefore,nafter,vmax):
-                    # save (0,0) separately - this will be offset value
-                    m = np.mean(crsig[:,ind-nbefore:ind+nafter], axis=1)
-                    if vx==0 and vy==0:
-                        bias_xy_list.append(m)
-                    else:
-                        measured_xy_list.append(m)
-                        target_xy_list.append((vx, vy))
+    #     for (ind,vx,vy,f) in self._button_list:
+    #         if ind+nafter < self._counter:
+    #             if np.abs(vx) < 100 and np.abs(vy) < 100 and self._check_velocity(crsig,ind,nbefore,nafter,vmax):
+    #                 # save (0,0) separately - this will be offset value
+    #                 m = np.mean(crsig[:,ind-nbefore:ind+nafter], axis=1)
+    #                 if vx==0 and vy==0:
+    #                     bias_xy_list.append(m)
+    #                 else:
+    #                     measured_xy_list.append(m)
+    #                     target_xy_list.append((vx, vy))
 
-        bias = np.stack(bias_xy_list).mean(axis=0)
-        measured_xy = np.stack(measured_xy_list)
-        # measured_xy = measured_xy - bias
-        target_xy = np.stack(target_xy_list)
+    #     bias = np.stack(bias_xy_list).mean(axis=0)
+    #     measured_xy = np.stack(measured_xy_list)
+    #     # measured_xy = measured_xy - bias
+    #     target_xy = np.stack(target_xy_list)
 
-        # initial guess for x_gain, y_gain, degrees
-        p0 = np.array([.2,.2,0])
+    #     # initial guess for x_gain, y_gain, degrees
+    #     p0 = np.array([.2,.2,0])
 
-        # limits for same
-        low_limits = np.array([0.1, 0.1, -10])
-        hi_limits = np.array([10, 10, 10])
+    #     # limits for same
+    #     low_limits = np.array([0.1, 0.1, -10])
+    #     hi_limits = np.array([10, 10, 10])
 
 
-        wrapper = TWrapperClass(-bias[0], -bias[1])
-        popt, pcov = curve_fit(wrapper.func, measured_xy.T, target_xy.T.ravel(), p0, bounds=(low_limits, hi_limits))
-        print("popt",popt)
-        print("pcov",pcov)
+    #     wrapper = TWrapperClass(-bias[0], -bias[1])
+    #     popt, pcov = curve_fit(wrapper.func, measured_xy.T, target_xy.T.ravel(), p0, bounds=(low_limits, hi_limits))
+    #     print("popt",popt)
+    #     print("pcov",pcov)
 
-        if doplot:
-            transformed = wrapper.func(measured_xy.T, popt[0], popt[1], popt[2])
-            transformed_xy = transformed.reshape(2, transformed.shape[0]//2)
-            self._do_plot_cr(measured_xy.T, transformed_xy, target_xy.T)
+    #     if doplot:
+    #         transformed = wrapper.func(measured_xy.T, popt[0], popt[1], popt[2])
+    #         transformed_xy = transformed.reshape(2, transformed.shape[0]//2)
+    #         self._do_plot_cr(measured_xy.T, transformed_xy, target_xy.T)
 
-    # def _do_plot_cr(self, xy_raw, xy_result, xy_target):
-    #     axes[0].scatter(xy_raw[0,:], xy_raw[1,:], color='blue', label='raw')
-    #     axes[0].set_xlabel('X')
-    #     axes[0].set_ylabel('Y')
-    #     axes[0].set_title('Raw CR signal')
-    #     axes[1].scatter(xy_result[0,:], xy_result[1,:], color='blue', label='transformed')
-    #     axes[1].set_xlabel('X')
-    #     axes[1].set_ylabel('Y')
-    #     f.tight_layout()
+    # # def _do_plot_cr(self, xy_raw, xy_result, xy_target):
+    # #     axes[0].scatter(xy_raw[0,:], xy_raw[1,:], color='blue', label='raw')
+    # #     axes[0].set_xlabel('X')
+    # #     axes[0].set_ylabel('Y')
+    # #     axes[0].set_title('Raw CR signal')
+    # #     axes[1].scatter(xy_result[0,:], xy_result[1,:], color='blue', label='transformed')
+    # #     axes[1].set_xlabel('X')
+    # #     axes[1].set_ylabel('Y')
+    # #     f.tight_layout()
 
-    #     plt.connect('button_press_event', on_click)
+    # #     plt.connect('button_press_event', on_click)
 
-    #     plt.show()
+    # #     plt.show()
 
 
 def event_printer(event):
@@ -304,10 +355,10 @@ def main() -> None:
     parser.add_argument("filename")
     args = parser.parse_args()
     ana = CalibratorAnalyzer(fps=500, initial_size_sec=1800, increase_step_sec=300, before_sec=0.1, after_sec=0.1, vmax_px_per_sec=5000, doplot=True)
-    cid = ana._f.canvas.mpl_connect('button_press_event', event_printer)
-    key_cid = ana._f.canvas.mpl_connect('key_press_event', on_key)
+    # cid = ana._f.canvas.mpl_connect('button_press_event', event_printer)
+    # key_cid = ana._f.canvas.mpl_connect('key_press_event', on_key)
 
-
+    plt.ion()
     g = FileEyeDataGenerator(args.filename)
     for ed in g.generate():
         ana.step(ed)
