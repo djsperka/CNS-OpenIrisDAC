@@ -16,6 +16,7 @@ from globalstate import GlobalState
 from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
 import logging
 from typing import Callable
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,44 @@ class GUI:
         g_min = 0
         g_max = 10
         g_res = .1
+
+
+
+        # move pupil tab first
+        self.pupil_bias_factor = 3e3
+        self.pupil_gain_factor = 3e-7
+        self.plb = GUIField(
+            'Left Pupil Bias', 'left_pupil_bias', field_size, 
+            self.state.pupil_cal, 'x_bias', gain_factor=self.pupil_bias_factor, 
+            increment=1, multiplicative=False
+            )
+        self.prb = GUIField(
+            'Right Pupil Bias', 'right_pupil_bias', field_size, 
+            self.state.pupil_cal, 'y_bias', gain_factor=self.pupil_bias_factor,
+            increment=1, multiplicative=False
+            )
+        self.plg = GUIField(
+            'Left Pupil Gain', 'left_pupil_gain', field_size, 
+            self.state.pupil_cal, 'x_gain', gain_factor=self.pupil_gain_factor, 
+            increment=0.05, multiplicative=True, flip_enabled=True,
+            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
+            )
+        self.prg = GUIField(
+            'Right Pupil Gain', 'right_pupil_gain', field_size, 
+            self.state.pupil_cal, 'y_gain', gain_factor=self.pupil_gain_factor,
+            increment=0.05, multiplicative=True, flip_enabled=True,
+            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
+            )
+
+        # pt = sg.Tab('Pupil', [
+        #     [self.plb.get_layout()],
+        #     # [self.prb.get_layout()],
+        #     [self.plg.get_layout()],
+        #     # [self.prg.get_layout()],
+        #     [sg.VPush()],
+        #     ])
+
+
         self.lbx = GUIField(
             'X Bias', 'left_x_bias', field_size,
             self.state.left_cal, 'x_bias', gain_factor=self.bias_factor,
@@ -160,6 +199,8 @@ class GUI:
             [self.lgx.get_layout()],
             [self.lgy.get_layout()],
             [self.lr.get_layout()],
+            [self.plb.get_layout()],
+            [self.plg.get_layout()],
             [sg.VPush()],
             [sg.Text('Method: '),
                 sg.Radio('DPI (P1-P4)', 'left_method', key='left_dpi', default=self.state.left_method=='dpi', enable_events=True), 
@@ -209,42 +250,10 @@ class GUI:
             ]])
         
         
-        self.pupil_bias_factor = 3e3
-        self.pupil_gain_factor = 3e-7
-        self.plb = GUIField(
-            'Left Pupil Bias', 'left_pupil_bias', field_size, 
-            self.state.pupil_cal, 'x_bias', gain_factor=self.pupil_bias_factor, 
-            increment=1, multiplicative=False
-            )
-        self.prb = GUIField(
-            'Right Pupil Bias', 'right_pupil_bias', field_size, 
-            self.state.pupil_cal, 'y_bias', gain_factor=self.pupil_bias_factor,
-            increment=1, multiplicative=False
-            )
-        self.plg = GUIField(
-            'Left Pupil Gain', 'left_pupil_gain', field_size, 
-            self.state.pupil_cal, 'x_gain', gain_factor=self.pupil_gain_factor, 
-            increment=0.05, multiplicative=True, flip_enabled=True,
-            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
-            )
-        self.prg = GUIField(
-            'Right Pupil Gain', 'right_pupil_gain', field_size, 
-            self.state.pupil_cal, 'y_gain', gain_factor=self.pupil_gain_factor,
-            increment=0.05, multiplicative=True, flip_enabled=True,
-            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
-            )
-
-        pt = sg.Tab('Pupil', [
-            [self.plb.get_layout()],
-            [self.prb.get_layout()],
-            [self.plg.get_layout()],
-            [self.prg.get_layout()],
-            [sg.VPush()],
-            ])
         
-        tabs = sg.TabGroup([[lt, rt, pt]], key='tabs', expand_y=True)
+        tabs = sg.TabGroup([[lt]], key='tabs', expand_y=True)
         
-        self.graph = sg.Graph(canvas_size=(400,400), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='grey', key='graph')
+        self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
 
         self.output_list = list(self.state.output_dict.keys())
         self.output_list.insert(0, 'None')
@@ -541,6 +550,10 @@ if __name__ == "__main__":
     from threading import Thread
 
     logging.basicConfig(level=logging.NOTSET)
+    # Source - https://stackoverflow.com/a/75448196
+    # Posted by Marco Spurio Cassio, modified by community. See post 'Timeline' for change history
+    # Retrieved 2026-07-17, License - CC BY-SA 4.0
+    plt.set_loglevel(level = 'warning')
 
     # Single input argument (optional) is filename to write output to.
     parser = argparse.ArgumentParser()
