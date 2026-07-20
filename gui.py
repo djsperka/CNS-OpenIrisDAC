@@ -45,18 +45,36 @@ class GUIField:
             self.default_value = abs(self.default_value)
 
     def get_layout(self):
-        layout = []
-        layout.append([sg.Text(self.title)] + ([sg.Checkbox('Flip', key=self.key+'_flip', default=self.flip_default, enable_events=True)] if self.flip_enabled else []))
-        layout.append([
-                        sg.Button('<', key=self.key+'_dec', enable_events=True, s=(2, self.size[1])), 
+        # layout = []
+        # layout.append([sg.Text(self.title)] + ([sg.Checkbox('Flip', key=self.key+'_flip', default=self.flip_default, enable_events=True)] if self.flip_enabled else []))
+        # layout.append([
+        #                 sg.Button('<', key=self.key+'_dec', enable_events=True, s=(1, self.size[1])), 
+        #                 sg.InputText(default_text=self.default_value, s=(self.size[0], self.size[1]), key=self.key+'_input', enable_events=True),
+        #                 sg.Button('>', key=self.key+'_inc', enable_events=True, s=(1, self.size[1]))
+        #             ])
+        # if self.slider_enabled:
+        #     layout.append([sg.Slider((self.slider_minimum, self.slider_maximum), orientation='h', s=(self.size[0]+3, 15), disable_number_display=True,
+        #                 default_value=self.default_value, resolution=self.slider_resolution, key=self.key+'_slider', enable_events=True)])
+        # layout.append([sg.HSeparator()])
+
+        # return sg.Column(layout)
+
+        layout_left = []
+        layout_right = []
+        layout_left.append([sg.Text(self.title, size=10)])
+        if self.flip_enabled:
+            layout_left.append([sg.Checkbox('Flip', key=self.key+'_flip', default=self.flip_default, enable_events=True)])
+        layout_right.append([
+                        sg.Button('<', key=self.key+'_dec', enable_events=True, s=(1, self.size[1])), 
                         sg.InputText(default_text=self.default_value, s=(self.size[0], self.size[1]), key=self.key+'_input', enable_events=True),
-                        sg.Button('>', key=self.key+'_inc', enable_events=True, s=(2, self.size[1]))
+                        sg.Button('>', key=self.key+'_inc', enable_events=True, s=(1, self.size[1]))
                     ])
         if self.slider_enabled:
-            layout.append([sg.Slider((self.slider_minimum, self.slider_maximum), orientation='h', s=(self.size[0]-1, 15), disable_number_display=True,
+            layout_right.append([sg.Slider((self.slider_minimum, self.slider_maximum), orientation='h', s=(self.size[0]+3, 15), disable_number_display=True,
                         default_value=self.default_value, resolution=self.slider_resolution, key=self.key+'_slider', enable_events=True)])
+        layout = []
+        layout.append([sg.Column(layout_left, element_justification='left'), sg.Column(layout_right, element_justification='right')])
         layout.append([sg.HSeparator()])
-
         return sg.Column(layout)
     
     def sync_state(self, window):
@@ -113,7 +131,7 @@ class GUI:
                 append
                 ])
         
-        field_size = (40,1)
+        field_size = (10,1)
 
         # DJS - changing gain, bias factor to 1
         self.bias_factor = 1
@@ -132,7 +150,7 @@ class GUI:
         self.pupil_bias_factor = 3e3
         self.pupil_gain_factor = 3e-7
         self.plb = GUIField(
-            'Left Pupil Bias', 'left_pupil_bias', field_size, 
+            'LPupil Bias', 'left_pupil_bias', field_size, 
             self.state.pupil_cal, 'x_bias', gain_factor=self.pupil_bias_factor, 
             increment=1, multiplicative=False
             )
@@ -142,7 +160,7 @@ class GUI:
             increment=1, multiplicative=False
             )
         self.plg = GUIField(
-            'Left Pupil Gain', 'left_pupil_gain', field_size, 
+            'LPupil Gain', 'left_pupil_gain', field_size, 
             self.state.pupil_cal, 'x_gain', gain_factor=self.pupil_gain_factor, 
             increment=0.05, multiplicative=True, flip_enabled=True,
             slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
@@ -193,6 +211,16 @@ class GUI:
             increment=1, multiplicative=False,
             slider_enabled=True, slider_minimum=-180, slider_maximum=180, slider_resolution=1
             )
+        
+        method_layout = []
+        method_layout.append(sg.Column([[sg.Text('Method: ')]]))
+        method_layout.append(
+            sg.Column(
+                [
+                    [ sg.Radio('DPI (P1-P4)', 'left_method', key='left_dpi', default=self.state.left_method=='dpi', enable_events=True) ],
+                    [ sg.Radio('PCR (P1-Pupil)', 'left_method', key='left_pcr', default=self.state.left_method=='pcr', enable_events=True) ]
+                ]
+            ))
         lt = sg.Tab('Left Eye', [
             [self.lbx.get_layout()],
             [self.lby.get_layout()],
@@ -202,10 +230,9 @@ class GUI:
             [self.plb.get_layout()],
             [self.plg.get_layout()],
             [sg.VPush()],
-            [sg.Text('Method: '),
-                sg.Radio('DPI (P1-P4)', 'left_method', key='left_dpi', default=self.state.left_method=='dpi', enable_events=True), 
-                sg.Radio('PCR (P1-Pupil)', 'left_method', key='left_pcr', default=self.state.left_method=='pcr', enable_events=True)
-            ]])
+            [sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue')],
+            method_layout
+            ])
         
         self.rbx = GUIField(
             'X Bias', 'right_x_bias', field_size,
@@ -251,29 +278,22 @@ class GUI:
         
         self.output_list = list(self.state.output_dict.keys())
         self.output_list.insert(0, 'None')
-        st = sg.Tab('Settings', [
-            [sg.Text('Channels: '),],
-            [sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue'), 
-             sg.Text('Left X: '), sg.Combo(self.output_list, default_value=self.output_list[1] if len(self.output_list) > 1 else 'None', 
-                                           key='left_x_channel', enable_events=True),
-             sg.Text(' Y: '), sg.Combo(self.output_list, default_value=self.output_list[2] if len(self.output_list) > 2 else 'None', 
+        settings_layout = [
+            [sg.Text('Channels: ')],
+            [sg.Text('Eye X: '), sg.Combo(self.output_list, default_value=self.output_list[1] if len(self.output_list) > 1 else 'None', 
+                                           key='left_x_channel', enable_events=True)],
+            [sg.Text('Eye Y: '), sg.Combo(self.output_list, default_value=self.output_list[2] if len(self.output_list) > 2 else 'None', 
                                             key='left_y_channel', enable_events=True)],
-            [sg.Button(' Zero ', key='right_zero', enable_events=True, button_color='firebrick1'), 
-             sg.Text('Right X: '), sg.Combo(self.output_list, default_value=self.output_list[3] if len(self.output_list) > 3 else 'None', 
-                                            key='right_x_channel', enable_events=True),
-             sg.Text(' Y: '), sg.Combo(self.output_list, default_value=self.output_list[4] if len(self.output_list) > 4 else 'None', 
-                                            key='right_y_channel', enable_events=True)],
-            [sg.Button(' ', disabled=True, button_color='DarkGoldenrod1'), 
-             sg.Text('Pupil Left: '), sg.Combo(self.output_list, default_value=self.output_list[5] if len(self.output_list) > 5 else 'None', 
-                                            key='pupil_x_channel', enable_events=True),
-             sg.Text(' Right: '), sg.Combo(self.output_list, default_value=self.output_list[6] if len(self.output_list) > 6 else 'None', 
-                                            key='pupil_y_channel', enable_events=True)],
-            [sg.Button('Switch Left/Right', key='switch', enable_events=True)]
-        ])
+            [sg.Text('Pupil: '), sg.Combo(self.output_list, default_value=self.output_list[5] if len(self.output_list) > 5 else 'None', 
+                                            key='pupil_x_channel', enable_events=True)]
+        ]
+        st = sg.Tab('Settings', settings_layout)
 
+# sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue'), 
+# sg.Button(' Zero ', key='right_zero', enable_events=True, button_color='firebrick1'), 
+# sg.Button(' ', disabled=True, button_color='DarkGoldenrod1'), 
+#            [sg.Button('Switch Left/Right', key='switch', enable_events=True)]
 
-
-        
         tabs = sg.TabGroup([[lt,st]], key='tabs', expand_y=True)
         
         self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
@@ -307,11 +327,12 @@ class GUI:
         left_x = self.state.output_dict[self.window['left_x_channel'].get()] if self.window['left_x_channel'].get() != 'None' else AnalogOutput()
         left_y = self.state.output_dict[self.window['left_y_channel'].get()] if self.window['left_y_channel'].get() != 'None' else AnalogOutput()
         left_pupil = self.state.output_dict[self.window['pupil_x_channel'].get()] if self.window['pupil_x_channel'].get() != 'None' else AnalogOutput()
-        right_x = self.state.output_dict[self.window['right_x_channel'].get()] if self.window['right_x_channel'].get() != 'None' else AnalogOutput()
-        right_y = self.state.output_dict[self.window['right_y_channel'].get()] if self.window['right_y_channel'].get() != 'None' else AnalogOutput()
-        right_pupil = self.state.output_dict[self.window['pupil_y_channel'].get()] if self.window['pupil_y_channel'].get() != 'None' else AnalogOutput()
+        # right_x = self.state.output_dict[self.window['right_x_channel'].get()] if self.window['right_x_channel'].get() != 'None' else AnalogOutput()
+        # right_y = self.state.output_dict[self.window['right_y_channel'].get()] if self.window['right_y_channel'].get() != 'None' else AnalogOutput()
+        # right_pupil = self.state.output_dict[self.window['pupil_y_channel'].get()] if self.window['pupil_y_channel'].get() != 'None' else AnalogOutput()
+        right_pupil = AnalogOutput()
         self.state.left_output = AnalogOutputPair(left_x, left_y)
-        self.state.right_output = AnalogOutputPair(right_x, right_y)
+        # self.state.right_output = AnalogOutputPair(right_x, right_y)
         self.state.pupil_output = AnalogOutputPair(left_pupil, right_pupil)
         
     def update_graph(self):
