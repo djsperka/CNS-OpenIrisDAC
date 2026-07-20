@@ -249,17 +249,9 @@ class GUI:
                 sg.Radio('PCR (P1-Pupil)', 'right_method', key='right_pcr', default=self.state.right_method=='pcr', enable_events=True)
             ]])
         
-        
-        
-        tabs = sg.TabGroup([[lt]], key='tabs', expand_y=True)
-        
-        self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
-
         self.output_list = list(self.state.output_dict.keys())
         self.output_list.insert(0, 'None')
-        graph_col = sg.Column([
-            [sg.Text('', key='error', size=(20,1), text_color='red')],
-            [self.graph],
+        st = sg.Tab('Settings', [
             [sg.Text('Channels: '),],
             [sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue'), 
              sg.Text('Left X: '), sg.Combo(self.output_list, default_value=self.output_list[1] if len(self.output_list) > 1 else 'None', 
@@ -277,6 +269,18 @@ class GUI:
              sg.Text(' Right: '), sg.Combo(self.output_list, default_value=self.output_list[6] if len(self.output_list) > 6 else 'None', 
                                             key='pupil_y_channel', enable_events=True)],
             [sg.Button('Switch Left/Right', key='switch', enable_events=True)]
+        ])
+
+
+
+        
+        tabs = sg.TabGroup([[lt,st]], key='tabs', expand_y=True)
+        
+        self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
+
+        graph_col = sg.Column([
+            [sg.Text('', key='error', size=(20,1), text_color='red')],
+            [self.graph]
             ])
         self.layout = [
             [sg.Menu(menu_def)],
