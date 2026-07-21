@@ -221,7 +221,15 @@ class GUI:
                     [ sg.Radio('PCR (P1-Pupil)', 'left_method', key='left_pcr', default=self.state.left_method=='pcr', enable_events=True) ]
                 ]
             ))
-        lt = sg.Tab('Left Eye', [
+
+        self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
+
+        graph_col = sg.Column([
+            [sg.Text('', key='error', size=(20,1), text_color='red')],
+            [self.graph]
+            ])
+
+        dd_col = sg.Column([
             [self.lbx.get_layout()],
             [self.lby.get_layout()],
             [self.lgx.get_layout()],
@@ -233,6 +241,8 @@ class GUI:
             [sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue')],
             method_layout
             ])
+
+        lt = sg.Tab('Left Eye', [[dd_col,graph_col]])
         
         self.rbx = GUIField(
             'X Bias', 'right_x_bias', field_size,
@@ -294,17 +304,24 @@ class GUI:
 # sg.Button(' ', disabled=True, button_color='DarkGoldenrod1'), 
 #            [sg.Button('Switch Left/Right', key='switch', enable_events=True)]
 
-        tabs = sg.TabGroup([[lt,st]], key='tabs', expand_y=True)
-        
-        self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
+        # tab for calibration plots
 
-        graph_col = sg.Column([
-            [sg.Text('', key='error', size=(20,1), text_color='red')],
-            [self.graph]
-            ])
+        self.raw_graph = sg.Graph(canvas_size=(635,400), graph_bottom_left=(-5,-5), graph_top_right=(725,455), background_color='white', key='graph')
+        self.cal_graph = sg.Graph(canvas_size=(400,400), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
+        calibration_layout = [[sg.Column([[self.raw_graph],[self.cal_graph]], element_justification='center')]]        
+        ct = sg.Tab('Calibration', calibration_layout)
+
+        tabs = sg.TabGroup([[lt,ct,st]], key='tabs', expand_y=True)
+        
+        # self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
+
+        # graph_col = sg.Column([
+        #     [sg.Text('', key='error', size=(20,1), text_color='red')],
+        #     [self.graph]
+        #     ])
         self.layout = [
             [sg.Menu(menu_def)],
-            [tabs, graph_col]
+            [tabs]
         ]
 
     def update_sliders(self):
@@ -368,6 +385,33 @@ class GUI:
         int1 = self.state.last_eyes_data.extra.ints[1] & 1
         self.graph.draw_point((4.3, -4.7), size=.30, color='green' if int0 else 'red')
         self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
+
+    def update_calibration_graphs(self):
+        self.raw_graph.erase()
+        self.raw_graph.draw_line((0,0), (0,450))
+        self.raw_graph.draw_line((0,450),(720,450))
+        self.raw_graph.draw_line((720,450), (720,0))
+        self.raw_graph.draw_line((720,0), (0,0))
+
+        self.cal_graph.erase()
+        self.cal_graph.draw_line((-5,0), (5,0))
+        self.cal_graph.draw_line((0,-5), (0,5))
+        self.cal_graph.draw_line((-5,-5), (-5,5))
+        self.cal_graph.draw_line((-5,5), (5,5))
+        self.cal_graph.draw_line((5,5),(5,-5))
+        self.cal_graph.draw_line((5,-5),(-5,-5))
+        self.cal_graph.draw_text('5V', (0.3,4.7), color='black')
+        self.cal_graph.draw_text('5V', (4.7,0.3), color='black')
+        self.cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
+        self.cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
+        
+        for xy in range(-5, 6):
+            self.cal_graph.draw_line((xy,-0.1), (xy,0.1))
+            self.cal_graph.draw_line((-0.1,xy), (0.1,xy))
+
+
+
+
 
     def window_loop(self, verbose=False):
         
@@ -479,6 +523,7 @@ class GUI:
             # update graph and errors on timeout (refresh)
             if event == sg.TIMEOUT_EVENT:
                 self.update_graph()
+                self.update_calibration_graphs()
 
                 # Get eye data
                 error = self.state.last_eyes_data.get_error(left_p4=self.state.left_method=='dpi', right_p4=self.state.right_method=='dpi')
