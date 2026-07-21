@@ -3,7 +3,6 @@ from scipy.optimize import curve_fit as curve_fit
 from open_iris_client import EyeData, EyesData, ExtraData, Point
 from dac_common import CalibrationParameters
 import math
-import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from dataclasses import dataclass
 from argparse import ArgumentParser
@@ -96,19 +95,18 @@ class CalibratorThread(Thread):
                 "increase_step_sec": self.globalstate.calibration_increase_step_sec,
                 "before_sec": self.globalstate.calibration_before_sec,
                 "after_sec": self.globalstate.calibration_after_sec,
-                "vmax_px_per_sec": self.globalstate.calibration_vmax_px_per_sec,
-                "doplot": self.globalstate.calibration_doplot
+                "vmax_px_per_sec": self.globalstate.calibration_vmax_px_per_sec
             }
-            cal = CalibratorAnalyzer(**args)
+            self.globalstate.calibrator = CalibratorAnalyzer(**args)
 
             # watch the queue, and watch for stopping
             logger.info("Calibrator - filling queue...")
             while not self._stopnow:
                 if not self.globalstate.calibration_queue.empty():
-                    cal.step(self.globalstate.calibration_queue.get())
+                    self.globalstate.calibrator.step(self.globalstate.calibration_queue.get())
                 else:
                     time.sleep(0.1)
-            logger.info(f"stopnow is set:  crsig shape is {np.shape(cal.get_crsig())}")
+            logger.info(f"stopnow is set:  received {self.globalstate.calibrator.counter}")
         logger.info(f"Thread ending.")
 
 
@@ -130,6 +128,7 @@ class CalibratorAnalyzer():
 
         # good measurements saved here
         self._meas = defaultdict(list)
+        self._invalidated = True
         
         # these are for state management
         self._counter = 0
@@ -138,14 +137,20 @@ class CalibratorAnalyzer():
         self._framesig_on = False
         self._framesig_on_at = 0
 
-        # plotting or not?
-        self._doplot = doplot
-        self._invalidated = False
-        self._f = None
-        self._axes = None
-
         # when using analyze_loop() as target of a Thread. Append EyeData to this. 
         self._queue = Queue()
+
+    @property
+    def measurements(self):
+        return self._meas
+
+    @property
+    def invalidated(self):
+        return self._invalidated
+    
+    @property
+    def counter(self):
+        return self._counter
 
     def step(self, ed: EyesData):
         data_ok = True
@@ -195,24 +200,24 @@ class CalibratorAnalyzer():
     
         self._counter += 1        
         self._button_ana()
-        self._update_plot()
+        #self._update_plot()
         return self._counter
 
-    def _update_plot(self):
-        if self._doplot:   # and self._invalidated:
-            if not self._f:
-                self._f, self._axes = plt.subplots(2, 1, figsize=(10,10))
-                self._paths = {}
-                self._invalidated = True
+    # def _update_plot(self):
+    #     if self._doplot:   # and self._invalidated:
+    #         if not self._f:
+    #             self._f, self._axes = plt.subplots(2, 1, figsize=(10,10))
+    #             self._paths = {}
+    #             self._invalidated = True
 
-            if self._invalidated:
-                self._invalidated = False
-                count = 0
-                for i, (key,pts) in enumerate(self._meas.items()):
-                    xy=np.stack(pts)
-                    self._axes[0].scatter(xy[:,0], xy[:,1], color=cm.tab20(i))
-                plt.show()
-                plt.pause(0.01)
+    #         if self._invalidated:
+    #             self._invalidated = False
+    #             count = 0
+    #             for i, (key,pts) in enumerate(self._meas.items()):
+    #                 xy=np.stack(pts)
+    #                 self._axes[0].scatter(xy[:,0], xy[:,1], color=cm.tab20(i))
+    #             plt.show()
+    #             plt.pause(0.01)
 
 
     def get_crsig(self, start:None|int=None, stop:None|int=None, step:None|int=None):

@@ -299,26 +299,20 @@ class GUI:
         ]
         st = sg.Tab('Settings', settings_layout)
 
-# sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue'), 
-# sg.Button(' Zero ', key='right_zero', enable_events=True, button_color='firebrick1'), 
-# sg.Button(' ', disabled=True, button_color='DarkGoldenrod1'), 
-#            [sg.Button('Switch Left/Right', key='switch', enable_events=True)]
-
         # tab for calibration plots
 
         self.raw_graph = sg.Graph(canvas_size=(635,400), graph_bottom_left=(-5,-5), graph_top_right=(725,455), background_color='white', key='graph')
         self.cal_graph = sg.Graph(canvas_size=(400,400), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
-        calibration_layout = [[sg.Column([[self.raw_graph],[self.cal_graph]], element_justification='center')]]        
+        graph_column = sg.Column([[self.raw_graph],[self.cal_graph]], element_justification='center')
+
+        # second column for other stuff. Initially, a button to test calibration.
+        other_column = sg.Column([[sg.Button('Fake cal', key='start-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Stop cal', key='stop-fake-cal', enable_events=True, button_color='PaleVioletRed4')]])
+        calibration_layout = [[graph_column,other_column]]        
         ct = sg.Tab('Calibration', calibration_layout)
 
         tabs = sg.TabGroup([[lt,ct,st]], key='tabs', expand_y=True)
         
-        # self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
-
-        # graph_col = sg.Column([
-        #     [sg.Text('', key='error', size=(20,1), text_color='red')],
-        #     [self.graph]
-        #     ])
         self.layout = [
             [sg.Menu(menu_def)],
             [tabs]
@@ -387,11 +381,18 @@ class GUI:
         self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
 
     def update_calibration_graphs(self):
+        logger.info("update_calibration_graphs")
         self.raw_graph.erase()
         self.raw_graph.draw_line((0,0), (0,450))
         self.raw_graph.draw_line((0,450),(720,450))
         self.raw_graph.draw_line((720,450), (720,0))
         self.raw_graph.draw_line((720,0), (0,0))
+
+        m = self.state.calibrator.measurements
+        for i, (key,pts) in enumerate(m.items()):
+            for xy in pts:
+                print(f"{i}: {str(xy)}")
+
 
         self.cal_graph.erase()
         self.cal_graph.draw_line((-5,0), (5,0))
@@ -521,16 +522,22 @@ class GUI:
                     self.state.load(Path(load_dir))
                     self.update_sliders()
 
+            # for testing only!
+            if event == 'start-fake-cal':
+                self.state.calibrating = True
+
+            if event == 'stop-fake-cal':
+                logger.info("stop-fake-cal")
+                self.state.calibrating = False
+
             # update calibration graphs
             if event == 'calibration-graphs':
-                if self.state.calibration_plot_invalidated:
-                    self.state.calibration_plot_invalidated = False
+                if self.state.calibrating and self.state.calibrator and self.state.calibrator.invalidated:
                     self.update_calibration_graphs()
 
             # update graph and errors on timeout (refresh)
             if event == sg.TIMEOUT_EVENT:
                 self.update_graph()
-                self.update_calibration_graphs()
 
                 # Get eye data
                 error = self.state.last_eyes_data.get_error(left_p4=self.state.left_method=='dpi', right_p4=self.state.right_method=='dpi')
@@ -561,19 +568,20 @@ class GUI:
 
 
 class DataPipeline:
-    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str=''):
+    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str='', fake_file: str=''):
         self.state = state
         self.server_address = server_address
         self.port = port
         self.fake = fake
         self.output = output
         self.output_file = None
+        self.fake_file = fake_file
 
     def run(self, debug=False):
 
         # create generator
         if self.fake:
-            generator = FakeEyeDataGenerator(self.state)
+            generator = FakeEyeDataGenerator(self.state, self.fake_file)
         else:  
             generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
 
@@ -626,16 +634,17 @@ class DataPipeline:
 if __name__ == "__main__":
     from threading import Thread
 
-    logging.basicConfig(level=logging.NOTSET)
+    logging.basicConfig(level=logging.INFO)
     # Source - https://stackoverflow.com/a/75448196
     # Posted by Marco Spurio Cassio, modified by community. See post 'Timeline' for change history
     # Retrieved 2026-07-17, License - CC BY-SA 4.0
-    plt.set_loglevel(level = 'warning')
+    #plt.set_loglevel(level = 'warning')
 
     # Single input argument (optional) is filename to write output to.
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", help="File to write output to", type=str, default='')
     parser.add_argument("--fake", help="Use fake data generator instead of OpenIrisClient", action='store_true')
+    parser.add_argument("--fake-file", help="pkl file to use as fake calibration data")
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     parser.add_argument("--cal-port", help="Port of calibrator server", default=0, type=int)
@@ -674,7 +683,7 @@ if __name__ == "__main__":
         dio_thread.start()
 
     # start data pipeline
-    dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output).run, args=(False,))
+    dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output, fake_file=args.fake_file).run, args=(False,))
     dp_thread.start()
 
     dp_thread.join()

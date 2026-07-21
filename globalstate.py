@@ -60,8 +60,8 @@ class GlobalState:
         self.calibration_before_sec:float=0.1
         self.calibration_after_sec:float=0.1
         self.calibration_vmax_px_per_sec:float=5000
-        self.calibration_doplot:bool=True
         self.calibration_queue:Queue=Queue()
+        self.calibrator=None
 
         self.load()
 
