@@ -416,6 +416,7 @@ class GUI:
     def window_loop(self, verbose=False):
         
         self.window = sg.Window('OpenIrisClient', self.layout)
+        self.window.timer_start(500, key='calibration-graphs', repeating=True)
         first = True
         while self.state.is_running:
             event, values = self.window.read(timeout=20) # 20ms = 50Hz
@@ -519,6 +520,12 @@ class GUI:
                 if load_dir:
                     self.state.load(Path(load_dir))
                     self.update_sliders()
+
+            # update calibration graphs
+            if event == 'calibration-graphs':
+                if self.state.calibration_plot_invalidated:
+                    self.state.calibration_plot_invalidated = False
+                    self.update_calibration_graphs()
 
             # update graph and errors on timeout (refresh)
             if event == sg.TIMEOUT_EVENT:
