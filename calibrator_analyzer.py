@@ -51,6 +51,20 @@ class TWrapperClass:
         return np.array([pp.x, pp.y])
 
     def func(self, xydata, x_gain, y_gain, degrees):
+        """Wrapper function for curve_fit. xydata expected to be Mx2. We apply the transform specified
+        by x_gain, y_gain and degrees along the "0" axis. The results of each are also stacked, and the
+        array returned by apply_along_axis is ZZZZZZ. We ravel() that -- curve_fit wants a 1-D result. 
+
+        Args:
+            xydata (_type_): _description_
+            x_gain (_type_): _description_
+            y_gain (_type_): _description_
+            degrees (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        logger.info(f"wrapper.func: xydata shape is {np.shape(xydata)}")
         pdata = np.apply_along_axis(self.do_transform, 0, xydata, x_gain, y_gain, degrees)
         return pdata.ravel()
 
@@ -147,7 +161,10 @@ class CalibratorAnalyzer():
     @property
     def invalidated(self):
         return self._invalidated
-    
+
+    def set_invalidated(self):
+        self._invalidated = True
+            
     @property
     def counter(self):
         return self._counter
@@ -266,6 +283,63 @@ class CalibratorAnalyzer():
                         binf.checked = True
                 else:
                     binf.checked = True # weird initialization values here
+
+
+    def dofit(self):
+        # The items in the measurements dict are lists. Each list element
+        # is a numpy ndarray with shape (2,) - this is the (x,y) of that crsig measurement. 
+        # The stim position is in the key, which is a tuple (stimx, stimy)
+
+        target_xy_list=[]
+        measured_xy_list = []
+        bias = (0,0)
+        for i, (key,pts) in enumerate(self._meas.items()):
+            if key == (0,0):
+                # get the mean of these - this is the bias
+                bias = np.stack(pts).mean(axis=0)
+                logger.info(f"Used {len(pts)} to get bias: {bias}")
+            else:
+                for xy in pts:
+                    target_xy_list.append(key)
+                    measured_xy_list.append(xy)
+
+        # pass the target xy so all x values are first, then the y values. Results from the wrapper func
+        # should be ravel()d like this. 
+        # pass measured values the same, but don't ravel(). That is, row 0 is x, row 1 is y.
+        logger.info(f"Fit will use {len(target_xy_list)} measurements")
+        target_xy_for_fit = np.stack(target_xy_list).T.ravel()
+        measured_xy_for_fit = np.stack(measured_xy_list).T
+
+        # initial values for parameters. 
+        # TODO - these should be the current calibration parameters? 
+
+        # initial guess for x_gain, y_gain, degrees
+        p0 = np.array([.2,.2,0])
+
+        # limits for same
+        low_limits = np.array([0.1, 0.1, -10])
+        hi_limits = np.array([10, 10, 10])
+
+
+        wrapper = TWrapperClass(-bias[0], -bias[1])
+        popt, pcov = curve_fit(wrapper.func, measured_xy_for_fit, target_xy_for_fit, p0, bounds=(low_limits, hi_limits))
+
+        return (-bias[0], -bias[1], popt[0], popt[1], popt[2])
+
+
+
+            # for p in pts:
+            #     #print(p, type(p), p[0], p[1])
+            #     #print(f"{i}: {xy[0]},{xy[1]}")
+            #     self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
+
+
+
+    #     wrapper = TWrapperClass(-bias[0], -bias[1])
+    #     popt, pcov = curve_fit(wrapper.func, measured_xy.T, target_xy.T.ravel(), p0, bounds=(low_limits, hi_limits))
+    #     print("popt",popt)
+    #     print("pcov",pcov)
+
 
 
 

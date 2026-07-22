@@ -308,7 +308,8 @@ class GUI:
 
         # second column for other stuff. Initially, a button to test calibration.
         other_column = sg.Column([[sg.Button('Fake cal', key='start-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Stop cal', key='stop-fake-cal', enable_events=True, button_color='PaleVioletRed4')]])
+                                  [sg.Button('Stop cal', key='stop-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')]])
         calibration_layout = [[graph_column,other_column]]        
         ct = sg.Tab('Calibration', calibration_layout)
 
@@ -388,14 +389,6 @@ class GUI:
         self.raw_graph.draw_line((100,100), (100,-100))
         self.raw_graph.draw_line((100,-100), (-100,-100))
 
-        m = self.state.calibrator.measurements
-        for i, (key,pts) in enumerate(m.items()):
-            #print(f"{i}: {type(pts)}, {type(pts[0])}")
-            for p in pts:
-                #print(p, type(p), p[0], p[1])
-                #print(f"{i}: {xy[0]},{xy[1]}")
-                self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
-
 
         self.cal_graph.erase()
         self.cal_graph.draw_line((-5,0), (5,0))
@@ -408,6 +401,21 @@ class GUI:
         self.cal_graph.draw_text('5V', (4.7,0.3), color='black')
         self.cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
         self.cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
+
+
+        m = self.state.calibrator.measurements
+        for i, (key,pts) in enumerate(m.items()):
+            #print(f"{i}: {type(pts)}, {type(pts[0])}")
+            for p in pts:
+                #print(p, type(p), p[0], p[1])
+                #print(f"{i}: {xy[0]},{xy[1]}")
+                self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
+
+                # transform using current calibration
+                pp = self.state.left_cal.transform(Point(p[0], p[1]))
+                self.cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=1)
+
+
         
         for xy in range(-5, 6):
             self.cal_graph.draw_line((xy,-0.1), (xy,0.1))
@@ -532,6 +540,16 @@ class GUI:
             if event == 'stop-fake-cal':
                 logger.info("stop-fake-cal")
                 self.state.calibrating = False
+
+            if event == 'do-cal-fit':
+                logger.info("do-cal-fit")
+                (x_bias, y_bias, x_gain, y_gain, rotation) = self.state.calibrator.dofit()
+                self.state.left_cal.x_bias = x_bias
+                self.state.left_cal.y_bias = y_bias
+                self.state.left_cal.x_gain = x_gain
+                self.state.left_cal.y_gain = y_gain
+                self.state.left_cal.rotation = rotation
+                self.state.calibrator.set_invalidated()
 
             # update calibration graphs
             if event == 'calibration-graphs':
