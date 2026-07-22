@@ -119,6 +119,7 @@ class GUIField:
             self.sync_state(window)
 
 class GUI:
+    colorlist = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075']
     def __init__(self, state:GlobalState) -> None:
         self.state = state
 
@@ -301,7 +302,7 @@ class GUI:
 
         # tab for calibration plots
 
-        self.raw_graph = sg.Graph(canvas_size=(635,400), graph_bottom_left=(-5,-5), graph_top_right=(725,455), background_color='white', key='graph')
+        self.raw_graph = sg.Graph(canvas_size=(400,400), graph_bottom_left=(-105,-105), graph_top_right=(105,105), background_color='white', key='graph')
         self.cal_graph = sg.Graph(canvas_size=(400,400), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
         graph_column = sg.Column([[self.raw_graph],[self.cal_graph]], element_justification='center')
 
@@ -381,17 +382,19 @@ class GUI:
         self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
 
     def update_calibration_graphs(self):
-        logger.info("update_calibration_graphs")
         self.raw_graph.erase()
-        self.raw_graph.draw_line((0,0), (0,450))
-        self.raw_graph.draw_line((0,450),(720,450))
-        self.raw_graph.draw_line((720,450), (720,0))
-        self.raw_graph.draw_line((720,0), (0,0))
+        self.raw_graph.draw_line((-100,-100), (-100,100))
+        self.raw_graph.draw_line((-100,100),(100,100))
+        self.raw_graph.draw_line((100,100), (100,-100))
+        self.raw_graph.draw_line((100,-100), (-100,-100))
 
         m = self.state.calibrator.measurements
         for i, (key,pts) in enumerate(m.items()):
-            for xy in pts:
-                print(f"{i}: {str(xy)}")
+            #print(f"{i}: {type(pts)}, {type(pts[0])}")
+            for p in pts:
+                #print(p, type(p), p[0], p[1])
+                #print(f"{i}: {xy[0]},{xy[1]}")
+                self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
 
 
         self.cal_graph.erase()
@@ -589,12 +592,14 @@ class DataPipeline:
             self.state.last_eyes_data = data
 
             if self.state.calibrating:
-                # assign dio bits to data.extra.ints[8] 
-                data.extra.ints[8] = self.state.calibration_diobits
-                data.extra.doubles[5] = self.state.calibration_vpdx
-                data.extra.doubles[6] = self.state.calibration_vpdy
-                data.extra.doubles[7] = self.state.calibration_fixation_x
-                data.extra.doubles[8] = self.state.calibration_fixation_y
+                # Assign values for current calibration stuff. 
+                if not self.fake:
+                    # assign dio bits to data.extra.ints[8] 
+                    data.extra.ints[8] = self.state.calibration_diobits
+                    data.extra.doubles[5] = self.state.calibration_vpdx
+                    data.extra.doubles[6] = self.state.calibration_vpdy
+                    data.extra.doubles[7] = self.state.calibration_fixation_x
+                    data.extra.doubles[8] = self.state.calibration_fixation_y
                 self.state.calibration_queue.put(data)
 
             if self.output:
