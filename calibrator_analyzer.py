@@ -84,6 +84,19 @@ class CalibratorThread(Thread):
         super().__init__()
         self.globalstate = gs
         self._stopnow = False
+        self._invalidated = False
+
+    @property
+    def measurements(self):
+        return self._meas
+
+    @property
+    def invalidated(self):
+        return self._invalidated
+
+    @property
+    def counter(self):
+        return self._counter
 
     def stop(self):
         self._stopnow = True
@@ -124,14 +137,21 @@ class CalibratorThread(Thread):
         logger.info(f"Thread ending.")
 
 
-class CalibratorAnalyzer():
-    def __init__(self, fps:int=500, initial_size_sec:int=1800, increase_step_sec:int = 300, before_sec:float=0.1, after_sec:float=0.1, vmax_px_per_sec:float=5000, doplot=True):
-        self._fps = fps
-        self._max_frames = np.floor(initial_size_sec * fps)
-        self._increase_step_frames = np.floor(increase_step_sec * fps)
-        self._nbefore = int(np.floor(before_sec * self._fps))
-        self._nafter = int(np.floor(after_sec * self._fps))
-        self._vmax = vmax_px_per_sec/self._fps
+
+class Calibrator(Thread):
+    def __init__(self, gs:GlobalState):
+        super().__init__()
+        self.globalstate = gs
+        self._stopnow = False
+        self.initialize_calibration()
+
+    def initialize_calibration(self):
+        self._fps = self.globalstate.calibration_fps
+        self._max_frames = np.floor(self.globalstate.calibration_initial_size_sec * self._fps)
+        self._increase_step_frames = np.floor(self.globalstate.calibration_increase_step_sec * self._fps)
+        self._nbefore = int(np.floor(self.globalstate.calibration_before_sec * self._fps))
+        self._nafter = int(np.floor(self.globalstate.calibration_after_sec * self._fps))
+        self._vmax = self.globalstate.calibration_vmax_px_per_sec/self._fps
 
         # data arrays
         self._pupil_xy=np.zeros((2,self._max_frames))
@@ -154,6 +174,71 @@ class CalibratorAnalyzer():
         # when using analyze_loop() as target of a Thread. Append EyeData to this. 
         self._queue = Queue()
 
+    def stop(self):
+        self._stopnow = True
+
+    def run(self):
+
+        # loop over this cycle until we're told to stop
+        while True:
+
+            # wait for globalstate to say we're calibrating. 
+            # we could get stopped while waiting, though, so take care of that.
+            while not self.globalstate.calibrating and not self._stopnow:
+                time.sleep(0.1)
+
+            logger.info("Calibrator thread - calibrating")
+            if self._stopnow:
+                break
+
+            # now create calibrator
+            self.initialize_calibration()
+            self._invalidated = True
+
+            # watch the queue, and watch for stopping
+            logger.info("Calibrator - filling queue...")
+            while not self._stopnow:
+                if not self.globalstate.calibration_queue.empty():
+                    self.step(self.globalstate.calibration_queue.get())
+                else:
+                    time.sleep(0.1)
+            logger.info(f"stopnow is set:  received {self.counter}")
+        logger.info(f"Thread ending.")
+
+
+
+
+
+# class CalibratorAnalyzer():
+#     def __init__(self, fps:int=500, initial_size_sec:int=1800, increase_step_sec:int = 300, before_sec:float=0.1, after_sec:float=0.1, vmax_px_per_sec:float=5000, doplot=True):
+#         self._fps = fps
+#         self._max_frames = np.floor(initial_size_sec * fps)
+#         self._increase_step_frames = np.floor(increase_step_sec * fps)
+#         self._nbefore = int(np.floor(before_sec * self._fps))
+#         self._nafter = int(np.floor(after_sec * self._fps))
+#         self._vmax = vmax_px_per_sec/self._fps
+
+#         # data arrays
+#         self._pupil_xy=np.zeros((2,self._max_frames))
+#         self._cr_xy=np.zeros((2,self._max_frames))
+#         self._p4_xy=np.zeros((2,self._max_frames))
+#         self._pupil_xy=np.zeros((2,self._max_frames))
+#         self._pupil_xy=np.zeros((2,self._max_frames))
+
+#         # good measurements saved here
+#         self._meas = defaultdict(list)
+#         self._invalidated = True
+        
+#         # these are for state management
+#         self._counter = 0
+#         self._button_up = True
+#         self._button_list: List[ButtonPressInfo] = [] # (index,x,y)
+#         self._framesig_on = False
+#         self._framesig_on_at = 0
+
+#         # when using analyze_loop() as target of a Thread. Append EyeData to this. 
+#         self._queue = Queue()
+
     @property
     def measurements(self):
         return self._meas
@@ -162,9 +247,10 @@ class CalibratorAnalyzer():
     def invalidated(self):
         return self._invalidated
 
-    def set_invalidated(self):
-        self._invalidated = True
-            
+    @invalidated.setter
+    def invalidated(self, v:bool):
+        self._invalidated = v
+
     @property
     def counter(self):
         return self._counter
@@ -217,7 +303,6 @@ class CalibratorAnalyzer():
     
         self._counter += 1        
         self._button_ana()
-        #self._update_plot()
         return self._counter
 
     # def _update_plot(self):
@@ -283,7 +368,6 @@ class CalibratorAnalyzer():
                         binf.checked = True
                 else:
                     binf.checked = True # weird initialization values here
-
 
     def dofit(self):
         # The items in the measurements dict are lists. Each list element
