@@ -3,6 +3,7 @@ from dac_common import CalibrationParameters, AnalogOutputPair, AnalogOutput
 from open_iris_client import EyesData
 import os
 from queue import Queue
+from platformdirs import PlatformDirs
 
 DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac')
 if DAC_BACKEND == 'dac':
@@ -15,16 +16,13 @@ else:
 
 
 class GlobalState:
-    def __init__(self, save_dir:Path|None = None) -> None:
-        if save_dir is None:
-            cals_dir = Path(__file__).parent / 'cals'
-            if not cals_dir.exists():
-                cals_dir.mkdir()
-            save_dir = Path(__file__).parent / 'cals' / '.state'
-
-        self.save_dir = save_dir
-        if not self.save_dir.exists():
-            self.save_dir.mkdir()
+    def __init__(self, root_dir:Path|None = None) -> None:
+        if root_dir is None:
+            root_path = PlatformDirs("CNS-OpenIrisDAC", appauthor=False).user_config_path
+        self.save_path = root_path / 'cals' / '.state'
+        self.save_path.mkdir(exist_ok=True, parents=True)
+        self.data_path = root_path / 'cals' / 'data'
+        self.data_path.mkdir(exist_ok=True, parents=True)
 
         self.left_cal = CalibrationParameters(-60,180,-.013,.013,0)
         self.left_method = 'dpi'
@@ -46,8 +44,8 @@ class GlobalState:
         self.calibrating = False
         self.calibration_plot_invalidated = True    # set this to True with calibration plots need updating
         self.calibration_diobits = int(0)
-        self.calibration_vpdx = 0.0
-        self.calibration_vpdy = 0.0
+        self.calibration_vpdx = 0.4
+        self.calibration_vpdy = 0.4
         self.calibration_fixation_x = 99999.9
         self.calibration_fixation_y = 99999.9
         self.calibration_recording = False
@@ -63,8 +61,10 @@ class GlobalState:
         self.calibration_queue:Queue=Queue()
         self.calibrator=None
 
+        # load calibration 
         self.load()
 
+        # see what kind of analog card we're using, prepare
         self.discover_analog_modules()
 
     def button_down(self, button:int):
@@ -89,7 +89,7 @@ class GlobalState:
 
     def save(self, path:Path|None = None):
         if path is None:
-            path = self.save_dir
+            path = self.save_path
 
         if not path.exists():
             path.mkdir()
@@ -103,7 +103,7 @@ class GlobalState:
     
     def load(self, path:Path|None = None):
         if path is None:
-            path = self.save_dir
+            path = self.save_path
 
         if not path.exists():
             print('No save directory found.')

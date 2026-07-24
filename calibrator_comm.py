@@ -151,14 +151,13 @@ class CalibratorComm(Thread):
         """
         response = 'OK'
         if command.lower().startswith("calstart"):
-            print("set calibrating")
             self.state.calibrating= True
         elif command.lower().startswith("calstop"):
             self.state.calibrating= False
-        elif command.lower().startswith("record"):
-            self.state.calibration_recording = True
-        elif command.lower().startswith("stoprecording"):
-            self.state.calibration_recording = False
+        # elif command.lower().startswith("record"):
+        #     self.state.calibration_recording = True
+        # elif command.lower().startswith("stoprecording"):
+        #     self.state.calibration_recording = False
         elif command.startswith("F "):
             # Handle 'F' command with a single argument formatted as "x,y,d,c"
             parts = command.split(maxsplit=1)

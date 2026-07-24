@@ -5,7 +5,7 @@ import pickle
 import math
 import logging
 
-logger = logging.getLogger("__name__")
+logger = logging.getLogger(__name__)
 
 class EyeDataGenerator:
     def __init__(self, state:GlobalState):

@@ -64,7 +64,7 @@ class TWrapperClass:
         Returns:
             _type_: _description_
         """
-        logger.info(f"wrapper.func: xydata shape is {np.shape(xydata)}")
+        #logger.info(f"wrapper.func: xydata shape is {np.shape(xydata)}")
         pdata = np.apply_along_axis(self.do_transform, 0, xydata, x_gain, y_gain, degrees)
         return pdata.ravel()
 
@@ -77,64 +77,6 @@ class ButtonPressInfo:
     vy: float
     frameind: int
     checked: bool
-
-
-class CalibratorThread(Thread):
-    def __init__(self, gs:GlobalState):
-        super().__init__()
-        self.globalstate = gs
-        self._stopnow = False
-        self._invalidated = False
-
-    @property
-    def measurements(self):
-        return self._meas
-
-    @property
-    def invalidated(self):
-        return self._invalidated
-
-    @property
-    def counter(self):
-        return self._counter
-
-    def stop(self):
-        self._stopnow = True
-
-    def run(self):
-
-        # loop over this cycle until we're told to stop
-        while True:
-
-            # wait for globalstate to say we're calibrating. 
-            # we could get stopped while waiting, though, so take care of that.
-            while not self.globalstate.calibrating and not self._stopnow:
-                time.sleep(0.1)
-
-            logger.info("Calibrator thread - calibrating")
-            if self._stopnow:
-                break
-
-            # now create calibrator
-            args = {
-                "fps": self.globalstate.calibration_fps,
-                "initial_size_sec": self.globalstate.calibration_initial_size_sec,
-                "increase_step_sec": self.globalstate.calibration_increase_step_sec,
-                "before_sec": self.globalstate.calibration_before_sec,
-                "after_sec": self.globalstate.calibration_after_sec,
-                "vmax_px_per_sec": self.globalstate.calibration_vmax_px_per_sec
-            }
-            self.globalstate.calibrator = CalibratorAnalyzer(**args)
-
-            # watch the queue, and watch for stopping
-            logger.info("Calibrator - filling queue...")
-            while not self._stopnow:
-                if not self.globalstate.calibration_queue.empty():
-                    self.globalstate.calibrator.step(self.globalstate.calibration_queue.get())
-                else:
-                    time.sleep(0.1)
-            logger.info(f"stopnow is set:  received {self.globalstate.calibrator.counter}")
-        logger.info(f"Thread ending.")
 
 
 
@@ -163,6 +105,8 @@ class Calibrator(Thread):
         # good measurements saved here
         self._meas = defaultdict(list)
         self._invalidated = True
+        self._cal = CalibrationParameters(0,0,1,1,0)
+        self._have_cal = False
         
         # these are for state management
         self._counter = 0
@@ -176,6 +120,14 @@ class Calibrator(Thread):
 
     def stop(self):
         self._stopnow = True
+
+    def get_cal(self):
+        return self._have_cal, self._cal
+
+    def clear_cal(self):
+        # clear calibration and data
+        self._have_cal = False
+        self._invalidated = True   # re-draw without the resultant points
 
     def run(self):
 
@@ -204,40 +156,6 @@ class Calibrator(Thread):
                     time.sleep(0.1)
             logger.info(f"stopnow is set:  received {self.counter}")
         logger.info(f"Thread ending.")
-
-
-
-
-
-# class CalibratorAnalyzer():
-#     def __init__(self, fps:int=500, initial_size_sec:int=1800, increase_step_sec:int = 300, before_sec:float=0.1, after_sec:float=0.1, vmax_px_per_sec:float=5000, doplot=True):
-#         self._fps = fps
-#         self._max_frames = np.floor(initial_size_sec * fps)
-#         self._increase_step_frames = np.floor(increase_step_sec * fps)
-#         self._nbefore = int(np.floor(before_sec * self._fps))
-#         self._nafter = int(np.floor(after_sec * self._fps))
-#         self._vmax = vmax_px_per_sec/self._fps
-
-#         # data arrays
-#         self._pupil_xy=np.zeros((2,self._max_frames))
-#         self._cr_xy=np.zeros((2,self._max_frames))
-#         self._p4_xy=np.zeros((2,self._max_frames))
-#         self._pupil_xy=np.zeros((2,self._max_frames))
-#         self._pupil_xy=np.zeros((2,self._max_frames))
-
-#         # good measurements saved here
-#         self._meas = defaultdict(list)
-#         self._invalidated = True
-        
-#         # these are for state management
-#         self._counter = 0
-#         self._button_up = True
-#         self._button_list: List[ButtonPressInfo] = [] # (index,x,y)
-#         self._framesig_on = False
-#         self._framesig_on_at = 0
-
-#         # when using analyze_loop() as target of a Thread. Append EyeData to this. 
-#         self._queue = Queue()
 
     @property
     def measurements(self):
@@ -305,23 +223,6 @@ class Calibrator(Thread):
         self._button_ana()
         return self._counter
 
-    # def _update_plot(self):
-    #     if self._doplot:   # and self._invalidated:
-    #         if not self._f:
-    #             self._f, self._axes = plt.subplots(2, 1, figsize=(10,10))
-    #             self._paths = {}
-    #             self._invalidated = True
-
-    #         if self._invalidated:
-    #             self._invalidated = False
-    #             count = 0
-    #             for i, (key,pts) in enumerate(self._meas.items()):
-    #                 xy=np.stack(pts)
-    #                 self._axes[0].scatter(xy[:,0], xy[:,1], color=cm.tab20(i))
-    #             plt.show()
-    #             plt.pause(0.01)
-
-
     def get_crsig(self, start:None|int=None, stop:None|int=None, step:None|int=None):
         """Get CR signal (cr-pupil) for the slice described by slice(start,stop,step). 
 
@@ -387,11 +288,13 @@ class Calibrator(Thread):
                     target_xy_list.append(key)
                     measured_xy_list.append(xy)
 
-        # pass the target xy so all x values are first, then the y values. Results from the wrapper func
-        # should be ravel()d like this. 
-        # pass measured values the same, but don't ravel(). That is, row 0 is x, row 1 is y.
+        # Multiply the target xy by the volts per degree in x and y. Then pass the target _volts_ as a 1D array 
+        # so all x values are first, then the y values. Results from the wrapper func should be ravel()d like this. 
+        # pass measured values the same, but don't ravel(). That is, row 0 is x, row 1 is y. This gets passed to the 
+        # func without any modification. 
+
         logger.info(f"Fit will use {len(target_xy_list)} measurements")
-        target_xy_for_fit = np.stack(target_xy_list).T.ravel()
+        target_xy_for_fit = (np.stack(target_xy_list)*(self.globalstate.calibration_vpdx,self.globalstate.calibration_vpdy)).T.ravel()
         measured_xy_for_fit = np.stack(measured_xy_list).T
 
         # initial values for parameters. 
@@ -408,83 +311,10 @@ class Calibrator(Thread):
         wrapper = TWrapperClass(-bias[0], -bias[1])
         popt, pcov = curve_fit(wrapper.func, measured_xy_for_fit, target_xy_for_fit, p0, bounds=(low_limits, hi_limits))
 
-        return (-bias[0], -bias[1], popt[0], popt[1], popt[2])
-
-
-
-            # for p in pts:
-            #     #print(p, type(p), p[0], p[1])
-            #     #print(f"{i}: {xy[0]},{xy[1]}")
-            #     self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
-
-
-
-    #     wrapper = TWrapperClass(-bias[0], -bias[1])
-    #     popt, pcov = curve_fit(wrapper.func, measured_xy.T, target_xy.T.ravel(), p0, bounds=(low_limits, hi_limits))
-    #     print("popt",popt)
-    #     print("pcov",pcov)
-
-
-
-
-    # def ana_cr(self, before_sec:float=0.1, after_sec:float=0.1, vmax_px_per_sec:float=5000,doplot=True):
-    #     nbefore = int(np.floor(before_sec * self._fps))
-    #     nafter = int(np.floor(after_sec * self._fps))
-    #     vmax = vmax_px_per_sec/self._fps
-
-    #     measured_xy_list=[] # tuples of xav,yav,xv,yv for good trials
-    #     bias_xy_list = []
-    #     target_xy_list=[]
-    #     crsig = self.get_crsig()
-
-    #     for (ind,vx,vy,f) in self._button_list:
-    #         if ind+nafter < self._counter:
-    #             if np.abs(vx) < 100 and np.abs(vy) < 100 and self._check_velocity(crsig,ind,nbefore,nafter,vmax):
-    #                 # save (0,0) separately - this will be offset value
-    #                 m = np.mean(crsig[:,ind-nbefore:ind+nafter], axis=1)
-    #                 if vx==0 and vy==0:
-    #                     bias_xy_list.append(m)
-    #                 else:
-    #                     measured_xy_list.append(m)
-    #                     target_xy_list.append((vx, vy))
-
-    #     bias = np.stack(bias_xy_list).mean(axis=0)
-    #     measured_xy = np.stack(measured_xy_list)
-    #     # measured_xy = measured_xy - bias
-    #     target_xy = np.stack(target_xy_list)
-
-    #     # initial guess for x_gain, y_gain, degrees
-    #     p0 = np.array([.2,.2,0])
-
-    #     # limits for same
-    #     low_limits = np.array([0.1, 0.1, -10])
-    #     hi_limits = np.array([10, 10, 10])
-
-
-    #     wrapper = TWrapperClass(-bias[0], -bias[1])
-    #     popt, pcov = curve_fit(wrapper.func, measured_xy.T, target_xy.T.ravel(), p0, bounds=(low_limits, hi_limits))
-    #     print("popt",popt)
-    #     print("pcov",pcov)
-
-    #     if doplot:
-    #         transformed = wrapper.func(measured_xy.T, popt[0], popt[1], popt[2])
-    #         transformed_xy = transformed.reshape(2, transformed.shape[0]//2)
-    #         self._do_plot_cr(measured_xy.T, transformed_xy, target_xy.T)
-
-    # # def _do_plot_cr(self, xy_raw, xy_result, xy_target):
-    # #     axes[0].scatter(xy_raw[0,:], xy_raw[1,:], color='blue', label='raw')
-    # #     axes[0].set_xlabel('X')
-    # #     axes[0].set_ylabel('Y')
-    # #     axes[0].set_title('Raw CR signal')
-    # #     axes[1].scatter(xy_result[0,:], xy_result[1,:], color='blue', label='transformed')
-    # #     axes[1].set_xlabel('X')
-    # #     axes[1].set_ylabel('Y')
-    # #     f.tight_layout()
-
-    # #     plt.connect('button_press_event', on_click)
-
-    # #     plt.show()
-
+        self._cal = CalibrationParameters(-bias[0], -bias[1], popt[0], popt[1], popt[2])
+        self._have_cal = True
+        self._invalidated = True
+        return
 
 def event_printer(event):
     """Helper function for exploring events.
@@ -519,8 +349,6 @@ def main() -> None:
     parser.add_argument("filename")
     args = parser.parse_args()
     ana = CalibratorAnalyzer(fps=500, initial_size_sec=1800, increase_step_sec=300, before_sec=0.1, after_sec=0.1, vmax_px_per_sec=5000, doplot=True)
-    # cid = ana._f.canvas.mpl_connect('button_press_event', event_printer)
-    # key_cid = ana._f.canvas.mpl_connect('key_press_event', on_key)
 
     plt.ion()
     g = FileEyeDataGenerator(args.filename)

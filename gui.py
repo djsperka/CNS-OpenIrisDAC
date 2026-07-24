@@ -2,14 +2,15 @@ from diothread import DIOThread
 from threading import Thread, Event
 from open_iris_client import OpenIrisClient, Point, EyesData, EyeData, ExtraData
 from calibrator_comm import CalibratorComm
-from calibrator_analyzer import CalibratorThread
+from calibrator_analyzer import Calibrator
 import PySimpleGUI as sg
 import time
+from platformdirs import PlatformDirs as PlatformDirs
 from pathlib import Path
 from dataclasses import dataclass
 import math
 import argparse
-import os
+import datetime
 import pickle
 from dac_common import AnalogOutput, AnalogOutputPair
 from globalstate import GlobalState
@@ -45,20 +46,6 @@ class GUIField:
             self.default_value = abs(self.default_value)
 
     def get_layout(self):
-        # layout = []
-        # layout.append([sg.Text(self.title)] + ([sg.Checkbox('Flip', key=self.key+'_flip', default=self.flip_default, enable_events=True)] if self.flip_enabled else []))
-        # layout.append([
-        #                 sg.Button('<', key=self.key+'_dec', enable_events=True, s=(1, self.size[1])), 
-        #                 sg.InputText(default_text=self.default_value, s=(self.size[0], self.size[1]), key=self.key+'_input', enable_events=True),
-        #                 sg.Button('>', key=self.key+'_inc', enable_events=True, s=(1, self.size[1]))
-        #             ])
-        # if self.slider_enabled:
-        #     layout.append([sg.Slider((self.slider_minimum, self.slider_maximum), orientation='h', s=(self.size[0]+3, 15), disable_number_display=True,
-        #                 default_value=self.default_value, resolution=self.slider_resolution, key=self.key+'_slider', enable_events=True)])
-        # layout.append([sg.HSeparator()])
-
-        # return sg.Column(layout)
-
         layout_left = []
         layout_right = []
         layout_left.append([sg.Text(self.title, size=10)])
@@ -172,16 +159,6 @@ class GUI:
             increment=0.05, multiplicative=True, flip_enabled=True,
             slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
             )
-
-        # pt = sg.Tab('Pupil', [
-        #     [self.plb.get_layout()],
-        #     # [self.prb.get_layout()],
-        #     [self.plg.get_layout()],
-        #     # [self.prg.get_layout()],
-        #     [sg.VPush()],
-        #     ])
-
-
         self.lbx = GUIField(
             'X Bias', 'left_x_bias', field_size,
             self.state.left_cal, 'x_bias', gain_factor=self.bias_factor,
@@ -309,7 +286,10 @@ class GUI:
         # second column for other stuff. Initially, a button to test calibration.
         other_column = sg.Column([[sg.Button('Fake cal', key='start-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Stop cal', key='stop-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')]])
+                                  [sg.Button('Fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Accept', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Load', key='cal-load', enable_events=True, button_color='PaleVioletRed4')]])
         calibration_layout = [[graph_column,other_column]]        
         ct = sg.Tab('Calibration', calibration_layout)
 
@@ -401,29 +381,21 @@ class GUI:
         self.cal_graph.draw_text('5V', (4.7,0.3), color='black')
         self.cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
         self.cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
-
-
-        m = self.state.calibrator.measurements
-        for i, (key,pts) in enumerate(m.items()):
-            #print(f"{i}: {type(pts)}, {type(pts[0])}")
-            for p in pts:
-                #print(p, type(p), p[0], p[1])
-                #print(f"{i}: {xy[0]},{xy[1]}")
-                self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
-
-                # transform using current calibration
-                pp = self.state.left_cal.transform(Point(p[0], p[1]))
-                self.cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=1)
-
-
-        
         for xy in range(-5, 6):
             self.cal_graph.draw_line((xy,-0.1), (xy,0.1))
             self.cal_graph.draw_line((-0.1,xy), (0.1,xy))
 
+        m = self.state.calibrator.measurements
+        b, tempCal = self.state.calibrator.get_cal()
+        for i, (key,pts) in enumerate(m.items()):
+            for p in pts:
+                # draw raw point
+                self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
 
-
-
+                # If a valid calibration exists (one that we created here, not the "official" one in state.
+                if b:
+                    pp = tempCal.transform(Point(p[0], p[1]))
+                    self.cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
 
     def window_loop(self, verbose=False):
         
@@ -543,18 +515,31 @@ class GUI:
 
             if event == 'do-cal-fit':
                 logger.info("do-cal-fit")
-                (x_bias, y_bias, x_gain, y_gain, rotation) = self.state.calibrator.dofit()
-                self.state.left_cal.x_bias = x_bias
-                self.state.left_cal.y_bias = y_bias
-                self.state.left_cal.x_gain = x_gain
-                self.state.left_cal.y_gain = y_gain
-                self.state.left_cal.rotation = rotation
-                self.state.calibrator.set_invalidated()
+                self.state.calibrator.dofit()
+
+            if event == 'cal-clear':
+                logger.info("cal-clear")
+                self.state.calibrator.clear_cal()
+
+            if event == 'cal-accept':
+                logger.info('cal-accept')
+                b, cal = self.state.calibrator.get_cal()
+                if b:
+                    self.state.left_cal = cal
+                else:
+                    logger.error(f"Calibrator does not have a valid calibration.")
+
+            if event == 'cal-load':
+                print(f"data path {str(self.state.data_path)}")
+                file_to_load = sg.popup_get_file('Select a cal-pkl file to load', initial_folder=str(self.state.data_path), file_types=(('pkl files', '.pkl'),), no_window=True)
+                # Build a list of tuples for each file type the file dialog should display
+                print(f'File selected: {file_to_load}')
 
             # update calibration graphs
             if event == 'calibration-graphs':
-                if self.state.calibrating and self.state.calibrator and self.state.calibrator.invalidated:
+                if self.state.calibrator and self.state.calibrator.invalidated:
                     self.update_calibration_graphs()
+                    self.state.calibrator.invalidated = False
 
             # update graph and errors on timeout (refresh)
             if event == sg.TIMEOUT_EVENT:
@@ -589,14 +574,31 @@ class GUI:
 
 
 class DataPipeline:
-    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str='', fake_file: str=''):
+    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str='', fake_file: str='', cal_recording_path=None):
         self.state = state
         self.server_address = server_address
         self.port = port
-        self.fake = fake
+        self.fake = fake        
         self.output = output
         self.output_file = None
         self.fake_file = fake_file
+        self.cal_recording_path = cal_recording_path
+        self.cal_recording_fd = None
+
+
+    def maybe_save_calibration_data(self, data):
+        if self.state.calibrating:
+            if not self.cal_recording_fd:
+                # open file
+                fpath = self.cal_recording_path / datetime.datetime.now().strftime("cal-%Y-%m-%d-%H-%M.pkl")
+                self.cal_recording_fd = open(fpath, 'wb')
+                logger.info(f"Opened file for calibration data: {str(fpath)}")
+            pickle.dump(data, self.cal_recording_fd)
+        else:
+            if self.cal_recording_fd:
+                close(self.cal_recording_fd)
+                self.cal_recording_fd = None
+                logger.info(f"Closed calibration data output file")
 
     def run(self, debug=False):
 
@@ -618,27 +620,13 @@ class DataPipeline:
                     data.extra.doubles[6] = self.state.calibration_vpdy
                     data.extra.doubles[7] = self.state.calibration_fixation_x
                     data.extra.doubles[8] = self.state.calibration_fixation_y
+                # put the EyesData into the queue - it will get picked up by the calibration thread
                 self.state.calibration_queue.put(data)
 
-            if self.output:
-                if self.state.calibration_recording:
-                    if not self.output_file:
-                        output_path = Path(self.output)
-                        if not output_path.parent.exists():
-                            output_path.parent.mkdir(parents=True)
-                        self.output_file = open(output_path, 'wb')
-                        logger.info(f"calibrator opened output file {self.output}")
-                    pickle.dump(data, self.output_file)
-                else:
-                    # check if file needs to be closed
-                    if self.output_file:
-                        self.output_file.close()
-                        self.output_file = None
-                        logger.info(f"calibrator closed output file {self.output}")
+                # Save the calibration data unless command line said not to
+                self.maybe_save_calibration_data(data)
 
-
-                #print(f'Wrote frame number {data.left.frame_number}')
-
+            # transform current signal and write to appropriate output
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
             left_output = self.state.left_cal.transform(left_output)
             self.state.left_output.write(left_output)
@@ -671,13 +659,15 @@ if __name__ == "__main__":
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     parser.add_argument("--cal-port", help="Port of calibrator server", default=0, type=int)
+    parser.add_argument("--no-cal-record", help="DO NOT record data (incl button&FRAME) during calibration", action='store_false')
     args = parser.parse_args()
-    if args.output:
-        p=Path(args.output)
-        if not p.parent.exists():
-            p.parent.mkdir(parents=True)
-        if p.exists():
-            logger.warning(f'Output file {args.output} already exists and will be overwritten.')
+    if not args.no_cal_record:
+        cal_recording_path = PlatformDirs("CNS-OpenIrisDAC", appauthor=False).user_data_path
+        # make sure it exists
+        cal_recording_path.mkdir(exist_ok=True)
+    else:
+        cal_recording_path = None
+
     if not args.fake:
         kwargs = {'server_address': args.address, 'port': args.port}
     else:
@@ -699,14 +689,15 @@ if __name__ == "__main__":
     if args.cal_port:
         calibrator_comm_thread = CalibratorComm(gs, port=args.cal_port, verbose=True)
         calibrator_comm_thread.start()
-        calibrator_ana_thread = CalibratorThread(gs)
+        calibrator_ana_thread = Calibrator(gs)
+        gs.calibrator = calibrator_ana_thread
         calibrator_ana_thread.start()
         dio_stop_event = Event()
         dio_thread = DIOThread(dio_stop_event, gs)
         dio_thread.start()
 
     # start data pipeline
-    dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, output=args.output, fake_file=args.fake_file).run, args=(False,))
+    dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, cal_recording_path=cal_recording_path, fake_file=args.fake_file).run, args=(False,))
     dp_thread.start()
 
     dp_thread.join()
