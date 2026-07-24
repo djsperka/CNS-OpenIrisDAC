@@ -81,9 +81,10 @@ class ButtonPressInfo:
 
 
 class Calibrator(Thread):
-    def __init__(self, gs:GlobalState):
+    def __init__(self, gs:GlobalState, brecord:bool):
         super().__init__()
         self.globalstate = gs
+        self._brecord = brecord
         self._stopnow = False
         self.initialize_calibration()
 
@@ -139,11 +140,10 @@ class Calibrator(Thread):
             while not self.globalstate.calibrating and not self._stopnow:
                 time.sleep(0.1)
 
-            logger.info("Calibrator thread - calibrating")
             if self._stopnow:
                 break
 
-            # now create calibrator
+            # Initialize
             self.initialize_calibration()
             self._invalidated = True
 
