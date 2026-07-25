@@ -689,7 +689,7 @@ if __name__ == "__main__":
     if args.cal_port:
         calibrator_comm_thread = CalibratorComm(gs, port=args.cal_port, verbose=True)
         calibrator_comm_thread.start()
-        calibrator_ana_thread = Calibrator(gs)
+        calibrator_ana_thread = Calibrator(gs, brecord=not args.no_cal_record)
         gs.calibrator = calibrator_ana_thread
         calibrator_ana_thread.start()
         dio_stop_event = Event()

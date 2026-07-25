@@ -16,6 +16,8 @@ from threading import Thread
 from queue import Queue
 from globalstate import GlobalState
 import logging
+from enum import Enum
+
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +83,23 @@ class ButtonPressInfo:
 
 
 class Calibrator(Thread):
+
+    class States(Enum):
+        INITIALIZE=1
+        LOAD=3
+        CHECK=4
+        IDLE=5
+        DONE=99
+
     def __init__(self, gs:GlobalState, brecord:bool):
         super().__init__()
         self.globalstate = gs
         self._brecord = brecord
         self._stopnow = False
+
+        # initialize first, skip state INITIALIZE
         self.initialize_calibration()
+        self._state = self.States.IDLE
 
     def initialize_calibration(self):
         self._fps = self.globalstate.calibration_fps
@@ -133,29 +146,41 @@ class Calibrator(Thread):
     def run(self):
 
         # loop over this cycle until we're told to stop
-        while True:
+        while self._state != self.States.DONE:
 
-            # wait for globalstate to say we're calibrating. 
-            # we could get stopped while waiting, though, so take care of that.
-            while not self.globalstate.calibrating and not self._stopnow:
-                time.sleep(0.1)
-
-            if self._stopnow:
-                break
-
-            # Initialize
-            self.initialize_calibration()
-            self._invalidated = True
-
-            # watch the queue, and watch for stopping
-            logger.info("Calibrator - filling queue...")
-            while not self._stopnow:
-                if not self.globalstate.calibration_queue.empty():
-                    self.step(self.globalstate.calibration_queue.get())
+            if self._state == self.States.INITIALIZE:
+                logger.info("entering INITIALIZE")
+                self.initialize_calibration()
+                self._invalidated = True
+                self._state = self.States.IDLE
+            elif self._state == self.States.IDLE:
+                # wait for globalstate to say we're calibrating. 
+                # we could get stopped while waiting, though, so take care of that.
+                if self._stopnow:
+                    self._state = self.States.DONE
+                elif self.globalstate.calibrating:
+                   logger.info("entering CHECK")
+                   self._state = self.States.CHECK
+                elif self.globalstate.loading:
+                    self._state = self.States.LOAD
                 else:
                     time.sleep(0.1)
-            logger.info(f"stopnow is set:  received {self.counter}")
-        logger.info(f"Thread ending.")
+            elif self._state == self.States.CHECK:
+                # check for stop, and check for pause
+                if self._stopnow:
+                    self._state = self.States.DONE
+                elif not self.globalstate.calibrating:
+                    logger.info("CHECK done - enter IDLE")
+                    self._state = self.States.IDLE
+                elif not self.globalstate.calibration_queue.empty():
+                    self.step(self.globalstate.calibration_queue.get())
+            elif self._state == self.States.LOAD:
+                logger.info(f"entering LOAD file {self.globalstate.loading_filename}")
+                self.globalstate.loading = False
+                for ed in FileEyeDataGenerator(self.globalstate.loading_filename).generate():
+                    self.step(ed)
+                self._state = self.States.IDLE
+
 
     @property
     def measurements(self):

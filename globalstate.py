@@ -42,6 +42,8 @@ class GlobalState:
 
         # Watch this - when True pass EyesData to calibration
         self.calibrating = False
+        self.loading = False
+        self.loading_filename = None
         self.calibration_plot_invalidated = True    # set this to True with calibration plots need updating
         self.calibration_diobits = int(0)
         self.calibration_vpdx = 0.4
