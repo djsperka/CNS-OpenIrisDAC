@@ -2,8 +2,6 @@ import numpy as np
 from scipy.optimize import curve_fit as curve_fit
 from open_iris_client import EyeData, EyesData, ExtraData, Point
 from dac_common import CalibrationParameters
-import math
-import matplotlib.cm as cm
 from dataclasses import dataclass
 from argparse import ArgumentParser
 from pathlib import Path
@@ -17,7 +15,8 @@ from queue import Queue
 from globalstate import GlobalState
 import logging
 from enum import Enum
-
+import datetime
+import pickle
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +144,11 @@ class Calibrator(Thread):
 
     def run(self):
 
+        # If we record calibration data, these are used to manage it
+        bFileIsOpen = False
+        pathRecFile = None
+        fdRecFile = None
+
         # loop over this cycle until we're told to stop
         while self._state != self.States.DONE:
 
@@ -167,20 +171,31 @@ class Calibrator(Thread):
                     time.sleep(0.1)
             elif self._state == self.States.CHECK:
                 # check for stop, and check for pause
+                # If recording of calibration data was requested (self._brecord), it is 
+                # dealt with in this state. The file is opened and closed here as needed.
                 if self._stopnow:
                     self._state = self.States.DONE
                 elif not self.globalstate.calibrating:
                     logger.info("CHECK done - enter IDLE")
                     self._state = self.States.IDLE
                 elif not self.globalstate.calibration_queue.empty():
-                    self.step(self.globalstate.calibration_queue.get())
-            elif self._state == self.States.LOAD:
-                logger.info(f"entering LOAD file {self.globalstate.loading_filename}")
-                self.globalstate.loading = False
-                for ed in FileEyeDataGenerator(self.globalstate.loading_filename).generate():
+                    ed = self.globalstate.calibration_queue.get()
                     self.step(ed)
-                self._state = self.States.IDLE
+                    if self._brecord:
+                        if not bFileIsOpen:
+                            # need to open a new file for this calibration data
+                            pathRecFile = self.globalstate.data_path / datetime.datetime.now().strftime("cal-%Y-%m-%d-%H-%M.pkl")
+                            fdRecFile = open(pathRecFile, 'wb')
+                            logger.info(f"Opened file for calibration data: {pathRecFile}")
+                            bFileIsOpen = True
+                        pickle.dump(ed, fdRecFile)
 
+                # if state is changed, then check if file needs to be closed
+                if self._state != self.States.CHECK and bFileIsOpen:
+                    fdRecFile.close()
+                    bFileIsOpen = False
+                    pathRecFile = None
+                    fdRecFile = None
 
     @property
     def measurements(self):

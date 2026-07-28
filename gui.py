@@ -18,8 +18,16 @@ from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
 import logging
 from typing import Callable
 import matplotlib.pyplot as plt
+from shared_resources import cal_lock
 
 logger = logging.getLogger(__name__)
+RAW_GRAPH_CANVAS_SIZE = (400, 400)
+RAW_GRAPH_BOTTOM_LEFT = (-105, -105)
+RAW_GRAPH_TOP_RIGHT = (105, 105)
+CAL_GRAPH_CANVAS_SIZE = (400, 400)
+CAL_GRAPH_BOTTOM_LEFT = (-5.1, -5.1)
+CAL_GRAPH_TOP_RIGHT = (5.1, 5.1)
+
 
 class GUIField:
     def __init__(self, title:str, key:str, size:tuple, obj:object, field:str, gain_factor:float=1, increment:float=1, multiplicative:bool=False,
@@ -142,23 +150,23 @@ class GUI:
             self.state.pupil_cal, 'x_bias', gain_factor=self.pupil_bias_factor, 
             increment=1, multiplicative=False
             )
-        self.prb = GUIField(
-            'Right Pupil Bias', 'right_pupil_bias', field_size, 
-            self.state.pupil_cal, 'y_bias', gain_factor=self.pupil_bias_factor,
-            increment=1, multiplicative=False
-            )
+        # self.prb = GUIField(
+        #     'Right Pupil Bias', 'right_pupil_bias', field_size, 
+        #     self.state.pupil_cal, 'y_bias', gain_factor=self.pupil_bias_factor,
+        #     increment=1, multiplicative=False
+        #     )
         self.plg = GUIField(
             'LPupil Gain', 'left_pupil_gain', field_size, 
             self.state.pupil_cal, 'x_gain', gain_factor=self.pupil_gain_factor, 
             increment=0.05, multiplicative=True, flip_enabled=True,
             slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
             )
-        self.prg = GUIField(
-            'Right Pupil Gain', 'right_pupil_gain', field_size, 
-            self.state.pupil_cal, 'y_gain', gain_factor=self.pupil_gain_factor,
-            increment=0.05, multiplicative=True, flip_enabled=True,
-            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
-            )
+        # self.prg = GUIField(
+        #     'Right Pupil Gain', 'right_pupil_gain', field_size, 
+        #     self.state.pupil_cal, 'y_gain', gain_factor=self.pupil_gain_factor,
+        #     increment=0.05, multiplicative=True, flip_enabled=True,
+        #     slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
+        #     )
         self.lbx = GUIField(
             'X Bias', 'left_x_bias', field_size,
             self.state.left_cal, 'x_bias', gain_factor=self.bias_factor,
@@ -189,7 +197,7 @@ class GUI:
             increment=1, multiplicative=False,
             slider_enabled=True, slider_minimum=-180, slider_maximum=180, slider_resolution=1
             )
-        
+         
         method_layout = []
         method_layout.append(sg.Column([[sg.Text('Method: ')]]))
         method_layout.append(
@@ -222,48 +230,6 @@ class GUI:
 
         lt = sg.Tab('Left Eye', [[dd_col,graph_col]])
         
-        self.rbx = GUIField(
-            'X Bias', 'right_x_bias', field_size,
-            self.state.right_cal, 'x_bias', gain_factor=self.bias_factor,
-            increment=1, multiplicative=False,
-            slider_enabled=True, slider_minimum=b_min, slider_maximum=b_max, slider_resolution=b_res
-            )
-        self.rby = GUIField(
-            'Y Bias', 'right_y_bias', field_size,
-            self.state.right_cal, 'y_bias', gain_factor=self.bias_factor,
-            increment=1, multiplicative=False,
-            slider_enabled=True, slider_minimum=b_min, slider_maximum=b_max, slider_resolution=b_res
-            )
-        self.rgx = GUIField(
-            'X Gain', 'right_x_gain', field_size,
-            self.state.right_cal, 'x_gain', gain_factor=self.gain_factor,
-            increment=0.05, multiplicative=True, flip_enabled=True,
-            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
-            )
-        self.rgy = GUIField(
-            'Y Gain', 'right_y_gain', field_size,
-            self.state.right_cal, 'y_gain', gain_factor=self.gain_factor,
-            increment=0.05, multiplicative=True, flip_enabled=True,
-            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
-            )
-        self.rr = GUIField(
-            'Rotation', 'right_rotation', field_size,
-            self.state.right_cal, 'rotation', gain_factor=1,
-            increment=1, multiplicative=False,
-            slider_enabled=True, slider_minimum=-180, slider_maximum=180, slider_resolution=1
-            )
-        rt = sg.Tab('Right Eye', [
-            [self.rbx.get_layout()],
-            [self.rby.get_layout()],
-            [self.rgx.get_layout()],
-            [self.rgy.get_layout()],
-            [self.rr.get_layout()],
-            [sg.VPush()],
-            [sg.Text('Method: '),
-                sg.Radio('DPI (P1-P4)', 'right_method', key='right_dpi', default=self.state.right_method=='dpi', enable_events=True), 
-                sg.Radio('PCR (P1-Pupil)', 'right_method', key='right_pcr', default=self.state.right_method=='pcr', enable_events=True)
-            ]])
-        
         self.output_list = list(self.state.output_dict.keys())
         self.output_list.insert(0, 'None')
         settings_layout = [
@@ -279,14 +245,15 @@ class GUI:
 
         # tab for calibration plots
 
-        self.raw_graph = sg.Graph(canvas_size=(400,400), graph_bottom_left=(-105,-105), graph_top_right=(105,105), background_color='white', key='graph')
-        self.cal_graph = sg.Graph(canvas_size=(400,400), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
+        self.raw_graph = sg.Graph(canvas_size=RAW_GRAPH_CANVAS_SIZE, graph_bottom_left=RAW_GRAPH_BOTTOM_LEFT, graph_top_right=RAW_GRAPH_TOP_RIGHT, background_color='white', key='graph')
+        self.cal_graph = sg.Graph(canvas_size=CAL_GRAPH_CANVAS_SIZE, graph_bottom_left=CAL_GRAPH_BOTTOM_LEFT, graph_top_right=CAL_GRAPH_TOP_RIGHT, background_color='white', key='graph')
         graph_column = sg.Column([[self.raw_graph],[self.cal_graph]], element_justification='center')
 
         # second column for other stuff. Initially, a button to test calibration.
         other_column = sg.Column([[sg.Button('Fake cal', key='start-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Stop cal', key='stop-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Remove point', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Accept', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Load', key='cal-load', enable_events=True, button_color='PaleVioletRed4')]])
@@ -301,20 +268,14 @@ class GUI:
         ]
 
     def update_sliders(self):
+        logger.info(f"current left cal: {self.state.left_cal}")
         self.lbx.sync_state(self.window)
         self.lby.sync_state(self.window)
         self.lgx.sync_state(self.window)
         self.lgy.sync_state(self.window)
         self.lr.sync_state(self.window)
-        self.rbx.sync_state(self.window)
-        self.rby.sync_state(self.window)
-        self.rgx.sync_state(self.window)
-        self.rgy.sync_state(self.window)
-        self.rr.sync_state(self.window)
         self.plb.sync_state(self.window)
-        self.prb.sync_state(self.window)
         self.plg.sync_state(self.window)
-        self.prg.sync_state(self.window)
 
     def update_output_channels(self):
         left_x = self.state.output_dict[self.window['left_x_channel'].get()] if self.window['left_x_channel'].get() != 'None' else AnalogOutput()
@@ -362,40 +323,69 @@ class GUI:
         self.graph.draw_point((4.3, -4.7), size=.30, color='green' if int0 else 'red')
         self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
 
-    def update_calibration_graphs(self):
-        self.raw_graph.erase()
-        self.raw_graph.draw_line((-100,-100), (-100,100))
-        self.raw_graph.draw_line((-100,100),(100,100))
-        self.raw_graph.draw_line((100,100), (100,-100))
-        self.raw_graph.draw_line((100,-100), (-100,-100))
-
-
-        self.cal_graph.erase()
-        self.cal_graph.draw_line((-5,0), (5,0))
-        self.cal_graph.draw_line((0,-5), (0,5))
-        self.cal_graph.draw_line((-5,-5), (-5,5))
-        self.cal_graph.draw_line((-5,5), (5,5))
-        self.cal_graph.draw_line((5,5),(5,-5))
-        self.cal_graph.draw_line((5,-5),(-5,-5))
-        self.cal_graph.draw_text('5V', (0.3,4.7), color='black')
-        self.cal_graph.draw_text('5V', (4.7,0.3), color='black')
-        self.cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
-        self.cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
-        for xy in range(-5, 6):
-            self.cal_graph.draw_line((xy,-0.1), (xy,0.1))
-            self.cal_graph.draw_line((-0.1,xy), (0.1,xy))
-
-        m = self.state.calibrator.measurements
-        b, tempCal = self.state.calibrator.get_cal()
-        for i, (key,pts) in enumerate(m.items()):
+    def update_raw_graph(self, raw_graph, measurements):
+        raw_graph.erase()
+        raw_graph.draw_line((-100,-100), (-100,100))
+        raw_graph.draw_line((-100,100),(100,100))
+        raw_graph.draw_line((100,100), (100,-100))
+        raw_graph.draw_line((100,-100), (-100,-100))
+        for i, (key,pts) in enumerate(measurements.items()):
             for p in pts:
                 # draw raw point
-                self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
+                raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
+                print(p)
 
-                # If a valid calibration exists (one that we created here, not the "official" one in state.
-                if b:
-                    pp = tempCal.transform(Point(p[0], p[1]))
-                    self.cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
+    def update_cal_graph(self, cal_graph, measurements, cal):
+        cal_graph.erase()
+        cal_graph.draw_line((-5,0), (5,0))
+        cal_graph.draw_line((0,-5), (0,5))
+        cal_graph.draw_line((-5,-5), (-5,5))
+        cal_graph.draw_line((-5,5), (5,5))
+        cal_graph.draw_line((5,5),(5,-5))
+        cal_graph.draw_line((5,-5),(-5,-5))
+        cal_graph.draw_text('5V', (0.3,4.7), color='black')
+        cal_graph.draw_text('5V', (4.7,0.3), color='black')
+        cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
+        cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
+        for xy in range(-5, 6):
+            cal_graph.draw_line((xy,-0.1), (xy,0.1))
+            cal_graph.draw_line((-0.1,xy), (0.1,xy))
+
+        for i, (key,pts) in enumerate(measurements.items()):
+            for p in pts:
+                pp = cal.transform(Point(p[0], p[1]))
+                cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
+
+    def update_calibration_graphs(self):
+        m = self.state.calibrator.measurements
+        b, tempCal = self.state.calibrator.get_cal()
+        self.update_raw_graph(self.raw_graph, m)
+        self.update_cal_graph(self.cal_graph, m, tempCal)
+
+        # self.cal_graph.erase()
+        # self.cal_graph.draw_line((-5,0), (5,0))
+        # self.cal_graph.draw_line((0,-5), (0,5))
+        # self.cal_graph.draw_line((-5,-5), (-5,5))
+        # self.cal_graph.draw_line((-5,5), (5,5))
+        # self.cal_graph.draw_line((5,5),(5,-5))
+        # self.cal_graph.draw_line((5,-5),(-5,-5))
+        # self.cal_graph.draw_text('5V', (0.3,4.7), color='black')
+        # self.cal_graph.draw_text('5V', (4.7,0.3), color='black')
+        # self.cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
+        # self.cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
+        # for xy in range(-5, 6):
+        #     self.cal_graph.draw_line((xy,-0.1), (xy,0.1))
+        #     self.cal_graph.draw_line((-0.1,xy), (0.1,xy))
+
+        # for i, (key,pts) in enumerate(m.items()):
+        #     for p in pts:
+        #         # draw raw point
+        #         self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
+
+        #         # If a valid calibration exists (one that we created here, not the "official" one in state.
+        #         if b:
+        #             pp = tempCal.transform(Point(p[0], p[1]))
+        #             self.cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
 
     def window_loop(self, verbose=False):
         
@@ -436,20 +426,13 @@ class GUI:
                     self.state.right_method = 'dpi'
 
             # Update states
-            self.rbx.update(self.window, event, values)
-            self.rby.update(self.window, event, values)
-            self.rgx.update(self.window, event, values)
-            self.rgy.update(self.window, event, values)
-            self.rr.update(self.window, event, values)
             self.lbx.update(self.window, event, values)
             self.lby.update(self.window, event, values)
             self.lgx.update(self.window, event, values)
             self.lgy.update(self.window, event, values)
             self.lr.update(self.window, event, values)
             self.plb.update(self.window, event, values)
-            self.prb.update(self.window, event, values)
             self.plg.update(self.window, event, values)
-            self.prg.update(self.window, event, values)
 
             # Update output channels
             if event in ['left_x_channel', 'left_y_channel', 'right_x_channel', 'right_y_channel', 'pupil_x_channel', 'pupil_y_channel']:
@@ -470,26 +453,11 @@ class GUI:
             
             # Zero right
             if event == 'right_zero':
-                last_right = self.state.last_eyes_data.right.cr - \
-                    (self.state.last_eyes_data.right.pupil if self.state.right_method == 'pcr' else self.state.last_eyes_data.right.p4)
-                self.state.right_cal.x_bias = -last_right.x
-                self.state.right_cal.y_bias = -last_right.y
-                self.rbx.sync_state(self.window)
-                self.rby.sync_state(self.window)
+                pass
 
             # Switch left and right
             if event == 'switch':
-                temp = self.state.left_output
-                self.state.left_output = self.state.right_output
-                self.state.right_output = temp
-
-                temp = self.window['right_x_channel'].get()
-                self.window['right_x_channel'].update(value=self.window['left_x_channel'].get())
-                self.window['left_x_channel'].update(value=temp)
-
-                temp = self.window['right_y_channel'].get()
-                self.window['right_y_channel'].update(value=self.window['left_y_channel'].get())
-                self.window['left_y_channel'].update(value=temp)
+                pass
 
             # Save config
             if event == 'Save Config':
@@ -513,6 +481,10 @@ class GUI:
                 logger.info("stop-fake-cal")
                 self.state.calibrating = False
 
+            if event == 'cal-edit-points':
+                logger.info("cal-edit-points")
+                b, m = self.edit_points(self.state.calibrator.measurements)
+
             if event == 'do-cal-fit':
                 logger.info("do-cal-fit")
                 self.state.calibrator.dofit()
@@ -525,7 +497,14 @@ class GUI:
                 logger.info('cal-accept')
                 b, cal = self.state.calibrator.get_cal()
                 if b:
-                    self.state.left_cal = cal
+                    with cal_lock:
+                        self.state.left_cal.x_bias = cal.x_bias
+                        self.state.left_cal.y_bias = cal.y_bias
+                        self.state.left_cal.x_gain = cal.x_gain
+                        self.state.left_cal.y_gain = cal.y_gain
+                        self.state.left_cal.rotation = cal.rotation
+                    self.update_sliders()   # updates calibration values in gui. Output
+                    
                 else:
                     logger.error(f"Calibrator does not have a valid calibration.")
 
@@ -551,7 +530,40 @@ class GUI:
                     self.window['error'].update(value = error, text_color='red')
                 else:
                     self.window['error'].update(value = 'Tracking', text_color='lawn green')
-                
+
+    def edit_points(self, measurements):
+        graph = sg.Graph(
+                    canvas_size=RAW_GRAPH_CANVAS_SIZE, graph_bottom_left=RAW_GRAPH_BOTTOM_LEFT, graph_top_right=RAW_GRAPH_TOP_RIGHT,   # Define the graph area
+                    change_submits=True,    # mouse click events
+                    background_color='white',
+                    key="edit-graph",
+                    pad=0)
+        layout = [[graph]]
+
+        window = sg.Window("Edit points", layout, finalize=True, margins=(0,0))
+        self.update_raw_graph(graph, measurements)
+        bFirst = True
+        while True:
+            event, values = window.read()
+            if event == sg.WIN_CLOSED:
+                break
+            print(event, values) if event != sg.TIMEOUT_EVENT else None # our normal debug print, but for this demo, don't spam output with timeouts
+
+            # if bFirst:
+            #     print("update_raw first")
+            #     self.update_raw_graph(graph, measurements)
+            #     bFirst = False
+
+            if event == "edit-graph":  # if there's a "Graph" event, then it's a mouse movement. Move the square
+                x, y = values["edit-graph"]        # get mouse position
+                # find closest point and highlight it
+
+
+                logger.info(f"clicked at {x}, {y}")
+
+        window.close()
+        return True, measurements
+
 
     def __enter__(self):
         return self
@@ -585,21 +597,6 @@ class DataPipeline:
         self.cal_recording_path = cal_recording_path
         self.cal_recording_fd = None
 
-
-    def maybe_save_calibration_data(self, data):
-        if self.state.calibrating:
-            if not self.cal_recording_fd:
-                # open file
-                fpath = self.cal_recording_path / datetime.datetime.now().strftime("cal-%Y-%m-%d-%H-%M.pkl")
-                self.cal_recording_fd = open(fpath, 'wb')
-                logger.info(f"Opened file for calibration data: {str(fpath)}")
-            pickle.dump(data, self.cal_recording_fd)
-        else:
-            if self.cal_recording_fd:
-                close(self.cal_recording_fd)
-                self.cal_recording_fd = None
-                logger.info(f"Closed calibration data output file")
-
     def run(self, debug=False):
 
         # create generator
@@ -622,9 +619,6 @@ class DataPipeline:
                     data.extra.doubles[8] = self.state.calibration_fixation_y
                 # put the EyesData into the queue - it will get picked up by the calibration thread
                 self.state.calibration_queue.put(data)
-
-                # Save the calibration data unless command line said not to
-                self.maybe_save_calibration_data(data)
 
             # transform current signal and write to appropriate output
             left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
