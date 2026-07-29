@@ -191,15 +191,46 @@ class Calibrator(Thread):
                         pickle.dump(ed, fdRecFile)
 
                 # if state is changed, then check if file needs to be closed
-                if self._state != self.States.CHECK and bFileIsOpen:
-                    fdRecFile.close()
-                    bFileIsOpen = False
-                    pathRecFile = None
-                    fdRecFile = None
+                if self._state != self.States.CHECK:
+                    if bFileIsOpen:
+                        fdRecFile.close()
+                        bFileIsOpen = False
+                        pathRecFile = None
+                        fdRecFile = None
+                    # write xy points to file
+                    pathXYFile = self.globalstate.data_path / datetime.datetime.now().strftime("cal-%Y-%m-%d-%H-%M.xy")
+
+    def load_measurements(self, pathToUse):
+        meas = defaultdict(list)
+        counter = 0
+        try:
+            with open(pathToUse, 'r') as f:
+                for line in f: 
+                    s=line.split(',')
+                    meas[(float(s[0]), float(s[1]))].append(np.array([float(s[2]), float(s[3])]))
+                    counter = counter+1
+        except Exception as e:
+            print(e)
+            print('Error loading calibration measurements file.')
+        logger.info(f"Loaded {counter} lines from {pathToUse}")
+        self._meas = meas
+        self._invalidated = True
+        return counter
+
+    def save_measurements(self, pathToUse, meas):
+        with open(pathToUse, 'w') as f:
+            for (key,pts) in meas.items():
+                for p in pts:
+                    f.write(f"{key[0]:f},{key[1]:f},{p[0]:f},{p[1]:f}\n")
 
     @property
     def measurements(self):
         return self._meas
+
+    @measurements.setter
+    def measurements(self, m:defaultdict):
+        self._meas = m
+        self._invalidated = True
 
     @property
     def invalidated(self):

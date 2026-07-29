@@ -8,10 +8,8 @@ import time
 from platformdirs import PlatformDirs as PlatformDirs
 from pathlib import Path
 from dataclasses import dataclass
-import math
+import copy
 import argparse
-import datetime
-import pickle
 from dac_common import AnalogOutput, AnalogOutputPair
 from globalstate import GlobalState
 from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
@@ -252,9 +250,9 @@ class GUI:
         # second column for other stuff. Initially, a button to test calibration.
         other_column = sg.Column([[sg.Button('Fake cal', key='start-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Stop cal', key='stop-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Remove point', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Accept', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Try to fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Edit points', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.Button('Accept fit', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Load', key='cal-load', enable_events=True, button_color='PaleVioletRed4')]])
         calibration_layout = [[graph_column,other_column]]        
@@ -268,7 +266,6 @@ class GUI:
         ]
 
     def update_sliders(self):
-        logger.info(f"current left cal: {self.state.left_cal}")
         self.lbx.sync_state(self.window)
         self.lby.sync_state(self.window)
         self.lgx.sync_state(self.window)
@@ -281,12 +278,8 @@ class GUI:
         left_x = self.state.output_dict[self.window['left_x_channel'].get()] if self.window['left_x_channel'].get() != 'None' else AnalogOutput()
         left_y = self.state.output_dict[self.window['left_y_channel'].get()] if self.window['left_y_channel'].get() != 'None' else AnalogOutput()
         left_pupil = self.state.output_dict[self.window['pupil_x_channel'].get()] if self.window['pupil_x_channel'].get() != 'None' else AnalogOutput()
-        # right_x = self.state.output_dict[self.window['right_x_channel'].get()] if self.window['right_x_channel'].get() != 'None' else AnalogOutput()
-        # right_y = self.state.output_dict[self.window['right_y_channel'].get()] if self.window['right_y_channel'].get() != 'None' else AnalogOutput()
-        # right_pupil = self.state.output_dict[self.window['pupil_y_channel'].get()] if self.window['pupil_y_channel'].get() != 'None' else AnalogOutput()
         right_pupil = AnalogOutput()
         self.state.left_output = AnalogOutputPair(left_x, left_y)
-        # self.state.right_output = AnalogOutputPair(right_x, right_y)
         self.state.pupil_output = AnalogOutputPair(left_pupil, right_pupil)
         
     def update_graph(self):
@@ -323,7 +316,7 @@ class GUI:
         self.graph.draw_point((4.3, -4.7), size=.30, color='green' if int0 else 'red')
         self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
 
-    def update_raw_graph(self, raw_graph, measurements):
+    def update_raw_graph(self, raw_graph, measurements, highlight=[]):
         raw_graph.erase()
         raw_graph.draw_line((-100,-100), (-100,100))
         raw_graph.draw_line((-100,100),(100,100))
@@ -333,7 +326,12 @@ class GUI:
             for p in pts:
                 # draw raw point
                 raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
-                print(p)
+        # highlight should be a list of i,j tuples [(i0,j0),(i1,j1),...]
+        for (key,ij) in highlight:
+            pts = measurements[key]
+            p=pts[ij[1]]
+            raw_graph.draw_point((p[0], p[1]), color=self.colorlist[ij[0]], size=8)
+
 
     def update_cal_graph(self, cal_graph, measurements, cal):
         cal_graph.erase()
@@ -361,31 +359,6 @@ class GUI:
         b, tempCal = self.state.calibrator.get_cal()
         self.update_raw_graph(self.raw_graph, m)
         self.update_cal_graph(self.cal_graph, m, tempCal)
-
-        # self.cal_graph.erase()
-        # self.cal_graph.draw_line((-5,0), (5,0))
-        # self.cal_graph.draw_line((0,-5), (0,5))
-        # self.cal_graph.draw_line((-5,-5), (-5,5))
-        # self.cal_graph.draw_line((-5,5), (5,5))
-        # self.cal_graph.draw_line((5,5),(5,-5))
-        # self.cal_graph.draw_line((5,-5),(-5,-5))
-        # self.cal_graph.draw_text('5V', (0.3,4.7), color='black')
-        # self.cal_graph.draw_text('5V', (4.7,0.3), color='black')
-        # self.cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
-        # self.cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
-        # for xy in range(-5, 6):
-        #     self.cal_graph.draw_line((xy,-0.1), (xy,0.1))
-        #     self.cal_graph.draw_line((-0.1,xy), (0.1,xy))
-
-        # for i, (key,pts) in enumerate(m.items()):
-        #     for p in pts:
-        #         # draw raw point
-        #         self.raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
-
-        #         # If a valid calibration exists (one that we created here, not the "official" one in state.
-        #         if b:
-        #             pp = tempCal.transform(Point(p[0], p[1]))
-        #             self.cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
 
     def window_loop(self, verbose=False):
         
@@ -482,19 +455,17 @@ class GUI:
                 self.state.calibrating = False
 
             if event == 'cal-edit-points':
-                logger.info("cal-edit-points")
                 b, m = self.edit_points(self.state.calibrator.measurements)
+                if b:
+                    self.state.calibrator.measurements = m
 
             if event == 'do-cal-fit':
-                logger.info("do-cal-fit")
                 self.state.calibrator.dofit()
 
             if event == 'cal-clear':
-                logger.info("cal-clear")
                 self.state.calibrator.clear_cal()
 
             if event == 'cal-accept':
-                logger.info('cal-accept')
                 b, cal = self.state.calibrator.get_cal()
                 if b:
                     with cal_lock:
@@ -509,10 +480,10 @@ class GUI:
                     logger.error(f"Calibrator does not have a valid calibration.")
 
             if event == 'cal-load':
-                print(f"data path {str(self.state.data_path)}")
-                file_to_load = sg.popup_get_file('Select a cal-pkl file to load', initial_folder=str(self.state.data_path), file_types=(('pkl files', '.pkl'),), no_window=True)
+                file_to_load = sg.popup_get_file('Select a cal-xy file to load', initial_folder=str(self.state.data_path), file_types=(('xy files', '.xy'),), no_window=True)
                 # Build a list of tuples for each file type the file dialog should display
-                print(f'File selected: {file_to_load}')
+                if file_to_load:
+                    self.state.calibrator.load_measurements(file_to_load)
 
             # update calibration graphs
             if event == 'calibration-graphs':
@@ -532,37 +503,99 @@ class GUI:
                     self.window['error'].update(value = 'Tracking', text_color='lawn green')
 
     def edit_points(self, measurements):
+
+        # work with a copy
+        tmpmeas = copy.deepcopy(measurements)
+
+        # dialog stuff
         graph = sg.Graph(
                     canvas_size=RAW_GRAPH_CANVAS_SIZE, graph_bottom_left=RAW_GRAPH_BOTTOM_LEFT, graph_top_right=RAW_GRAPH_TOP_RIGHT,   # Define the graph area
                     change_submits=True,    # mouse click events
                     background_color='white',
                     key="edit-graph",
                     pad=0)
-        layout = [[graph]]
+        delButton = sg.Button('Delete Selected', key='delete-selected', enable_events=True)
+        clearButton = sg.Button('Clear Selection', key='clear-selected', enable_events=True)
+        cancelButton = sg.Button('Cancel', key='cancel-edit', enable_events=True)
+        okButton = sg.Button('OK', key='ok-edit', enable_events=True)
+        buttons=[delButton, clearButton, cancelButton, okButton]
 
+        # find point in meas closest to given x,y        
+        def closest_point(xms,yms,meas):
+            keyclose=(-1,-1)
+            iclose=-1
+            jclose=-1
+            dsqmin=999999999
+            for i, (key,pts) in enumerate(meas.items()):
+                for j,p in enumerate(pts):
+                    dsq = (xms-p[0])**2+(yms-p[1])**2
+                    if dsq < dsqmin:
+                        keyclose=key
+                        iclose=i
+                        jclose=j
+                        dsqmin=dsq
+            return keyclose, (iclose, jclose)
+
+        # delete points in del_list. 
+        # del list has tuples. Each tuple has a key and an int. The key finds the
+        # array in meas, the int is the index to pop.
+        def delete_points(meas, del_list):
+            # sort in reverse, then delete in place
+            rev = sorted(del_list, reverse=True)
+            for (key,j) in rev:
+                meas[key].pop(j[1])
+            return meas
+
+        def count_meas(meas):
+            n=0
+            for key,pts in meas.items():
+                n+=len(pts)
+            return n
+
+        layout = [[graph],buttons]
         window = sg.Window("Edit points", layout, finalize=True, margins=(0,0))
-        self.update_raw_graph(graph, measurements)
-        bFirst = True
+        self.update_raw_graph(graph, tmpmeas )
+        bDirty = True
+        selected_list=[]
+        bOK = False
         while True:
-            event, values = window.read()
+            event, values = window.read(timeout=20)
             if event == sg.WIN_CLOSED:
                 break
-            print(event, values) if event != sg.TIMEOUT_EVENT else None # our normal debug print, but for this demo, don't spam output with timeouts
-
-            # if bFirst:
-            #     print("update_raw first")
-            #     self.update_raw_graph(graph, measurements)
-            #     bFirst = False
+            #print(event, values) if event != sg.TIMEOUT_EVENT else None # our normal debug print, but for this demo, don't spam output with timeouts
 
             if event == "edit-graph":  # if there's a "Graph" event, then it's a mouse movement. Move the square
-                x, y = values["edit-graph"]        # get mouse position
+                xmouse, ymouse = values["edit-graph"]        # get mouse position
                 # find closest point and highlight it
+                k,ij = closest_point(xmouse, ymouse, tmpmeas )
+                #logger.info(f"clicked at {xmouse}, {ymouse}, selected {k},{ij}")
+                selected_list.append((k,ij))
+                bDirty = True
+            elif event == "clear-selected":
+                selected_list.clear()
+                bDirty = True
+            elif event == "delete-selected":
+                delete_points(tmpmeas , selected_list)
+                selected_list.clear()
+                bDirty = True
+            elif event == "cancel-edit":
+                bOK = False
+                break
+            elif event == "ok-edit":
+                bOK = True
+                break
+            if event == sg.TIMEOUT_EVENT:
+                if bDirty:
+                    self.update_raw_graph(graph, tmpmeas , selected_list)
+                    bDirty = False
 
-
-                logger.info(f"clicked at {x}, {y}")
+                # enable/disable
+                if len(selected_list)>0:
+                    pass
+                    #enable DELETE button
 
         window.close()
-        return True, measurements
+        return bOK, tmpmeas 
 
 
     def __enter__(self):
