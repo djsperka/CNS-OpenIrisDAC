@@ -39,6 +39,7 @@ class FakeEyeDataGenerator(EyeDataGenerator):
         self.t = 0
         self.fake_calf = None
         self.fake_calfilename = fake_calfilename
+        self.start_time = 0
 
     def _makefakedata(self, t):
         """Generate a EyeData struct with pupil and CR location set so the "eye" orbits the origin at a fixed radius.
@@ -67,15 +68,18 @@ class FakeEyeDataGenerator(EyeDataGenerator):
             else:
                 if not self.fake_calf:
                     logger.info(f"Switch to calibration fake data from file {self.fake_calfilename}")
+                    self.start_time = time.time()
+                    self.counter=0
                     self.fake_calf = open(self.fake_calfilename,'rb')
                 try:
                     ed = pickle.load(self.fake_calf)
+                    self.counter = self.counter+1
                     yield ed
                 except EOFError:
                     # done calibrating - change state and close this generator
-                    close(self.fake_calf)
+                    self.fake_calf.close()
                     self.fake_calf = None
-                    logger.info(f"Fake calibration data done.")
+                    logger.info(f"Fake calibration data done. Loaded {self.counter} records in {time.time()-self.start_time} s")
                     self.state.calibrating = False
                     data = EyesData(self._makefakedata(self.t))
                     yield data
