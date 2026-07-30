@@ -39,6 +39,11 @@ class CalibrationParameters:
 
     def transform(self, pos:Point):
         return ((pos + Point(self.x_bias, self.y_bias)) * Point(self.x_gain, self.y_gain)).rotate(self.rotation * math.pi / 180)
+
+    def inverse(self, v:Point):
+        # rotate neg
+        v2 = v.rotate(-self.rotation * math.pi / 180) * Point(1/self.x_gain, 1/self.y_gain) - Point(self.x_bias, self.y_bias)
+        return v2
     
     def save(self, fname:Path):
         with open(fname, 'w') as f:
