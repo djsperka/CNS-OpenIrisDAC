@@ -1,13 +1,11 @@
 from diothread import DIOThread
 from threading import Thread, Event
-from open_iris_client import OpenIrisClient, Point, EyesData, EyeData, ExtraData
+from open_iris_client import Point
 from calibrator_comm import CalibratorComm
 from calibrator_analyzer import Calibrator
 import PySimpleGUI as sg
-import time
 from platformdirs import PlatformDirs as PlatformDirs
 from pathlib import Path
-from dataclasses import dataclass
 import copy
 import argparse
 from dac_common import AnalogOutput, AnalogOutputPair
@@ -17,8 +15,12 @@ import logging
 from typing import Callable
 import matplotlib.pyplot as plt
 from shared_resources import cal_lock
+from dac_common import CalibrationParameters
 
 logger = logging.getLogger(__name__)
+MAIN_GRAPH_CANVAS_SIZE = (600, 600)
+MAIN_GRAPH_BOTTOM_LEFT = (-5.1, -5.1)
+MAIN_GRAPH_TOP_RIGHT = (5.1, 5.1)
 RAW_GRAPH_CANVAS_SIZE = (400, 400)
 RAW_GRAPH_BOTTOM_LEFT = (-105, -105)
 RAW_GRAPH_TOP_RIGHT = (105, 105)
@@ -206,12 +208,19 @@ class GUI:
                 ]
             ))
 
-        self.graph = sg.Graph(canvas_size=(600,600), graph_bottom_left=(-5.1,-5.1), graph_top_right=(5.1,5.1), background_color='white', key='graph')
+        self.graph = sg.Graph(canvas_size=MAIN_GRAPH_CANVAS_SIZE, graph_bottom_left=MAIN_GRAPH_BOTTOM_LEFT, graph_top_right=MAIN_GRAPH_TOP_RIGHT, background_color='white', key='graph')
+        self.cbmouse = sg.Checkbox("Mouse Mode", key='check-mouse-mode', enable_events=True, default=self.state.is_mouse_mode)
 
         graph_col = sg.Column([
             [sg.Text('', key='error', size=(20,1), text_color='red')],
-            [self.graph]
+            [self.graph],
+            [self.cbmouse]
             ])
+        x_bias = -MAIN_GRAPH_CANVAS_SIZE[0]/2
+        y_bias = -MAIN_GRAPH_CANVAS_SIZE[1]/2
+        x_gain =  (MAIN_GRAPH_TOP_RIGHT[0]-MAIN_GRAPH_BOTTOM_LEFT[0])/MAIN_GRAPH_CANVAS_SIZE[0]
+        y_gain = -(MAIN_GRAPH_TOP_RIGHT[1]-MAIN_GRAPH_BOTTOM_LEFT[1])/MAIN_GRAPH_CANVAS_SIZE[1]
+        self.mouse_to_volts = CalibrationParameters(x_bias=x_bias, y_bias=y_bias, x_gain=x_gain, y_gain=y_gain, rotation=0)
 
         dd_col = sg.Column([
             [self.lbx.get_layout()],
@@ -362,7 +371,8 @@ class GUI:
 
     def window_loop(self, verbose=False):
         
-        self.window = sg.Window('OpenIrisClient', self.layout)
+        self.window = sg.Window('OpenIrisClient', self.layout, finalize=True)
+        self.graph.bind('<Motion>', '-mouse-motion')
         self.window.timer_start(500, key='calibration-graphs', repeating=True)
         first = True
         while self.state.is_running:
@@ -406,6 +416,24 @@ class GUI:
             self.lr.update(self.window, event, values)
             self.plb.update(self.window, event, values)
             self.plg.update(self.window, event, values)
+
+            # checkbox? 
+            if event == "check-mouse-mode":
+                logger.info(f"check-mouse-mode {self.cbmouse.get()}")
+                self.state.is_mouse_mode = self.cbmouse.get()
+                if self.state.is_mouse_mode:
+                    self.graph.update(background_color = 'yellow')
+
+                else:
+                    self.graph.update(background_color = 'white')
+
+            # mouse on graph? 
+            if event == 'graph-mouse-motion':
+                if self.state.is_mouse_mode:
+                    e = self.graph.user_bind_event
+                    self.state.mouse_mode_xy = self.mouse_to_volts.transform(Point(e.x, e.y))
+                # print(e)
+                #logger.info(f"graph-mouse-motion {e.x},{e.y}")
 
             # Update output channels
             if event in ['left_x_channel', 'left_y_channel', 'right_x_channel', 'right_y_channel', 'pupil_x_channel', 'pupil_y_channel']:
@@ -654,9 +682,12 @@ class DataPipeline:
                 self.state.calibration_queue.put(data)
 
             # transform current signal and write to appropriate output
-            left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
-            left_output = self.state.left_cal.transform(left_output)
-            self.state.left_output.write(left_output)
+            if not self.state.is_mouse_mode:
+                left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
+                left_output = self.state.left_cal.transform(left_output)
+                self.state.left_output.write(left_output)
+            else:
+                self.state.left_output.write(self.state.mouse_mode_xy)
             
             right_output = data.right.cr - (data.right.pupil if self.state.right_method == 'pcr' else data.right.p4)
             right_output = self.state.right_cal.transform(right_output)

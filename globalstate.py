@@ -1,6 +1,6 @@
 from pathlib import Path
 from dac_common import CalibrationParameters, AnalogOutputPair, AnalogOutput
-from open_iris_client import EyesData
+from open_iris_client import EyesData, Point
 import os
 from queue import Queue
 from platformdirs import PlatformDirs
@@ -38,9 +38,11 @@ class GlobalState:
         self.last_eyes_data = EyesData()
         self.is_running = True
 
-        # this stuff for calibration
+        # for testing. When True, output taken from mouse position on main output graph
+        self.is_mouse_mode = False
+        self.mouse_mode_xy = Point(0,0)
 
-        # Watch this - when True pass EyesData to calibration
+        # this stuff for calibration
         self.calibrating = False
         self.loading = False
         self.loading_filename = None
