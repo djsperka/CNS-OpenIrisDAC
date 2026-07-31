@@ -13,7 +13,6 @@ from globalstate import GlobalState
 from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
 import logging
 from typing import Callable
-import matplotlib.pyplot as plt
 from shared_resources import cal_lock
 from dac_common import CalibrationParameters
 
@@ -704,10 +703,6 @@ if __name__ == "__main__":
     from threading import Thread
 
     logging.basicConfig(level=logging.INFO)
-    # Source - https://stackoverflow.com/a/75448196
-    # Posted by Marco Spurio Cassio, modified by community. See post 'Timeline' for change history
-    # Retrieved 2026-07-17, License - CC BY-SA 4.0
-    #plt.set_loglevel(level = 'warning')
 
     # Single input argument (optional) is filename to write output to.
     parser = argparse.ArgumentParser()

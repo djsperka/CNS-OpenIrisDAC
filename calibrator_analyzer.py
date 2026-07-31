@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from argparse import ArgumentParser
 from pathlib import Path
 from generator import FileEyeDataGenerator
-from matplotlib.backend_bases import MouseButton
 from typing import List
 from collections import defaultdict as defaultdict
 import time
@@ -22,16 +21,6 @@ logger = logging.getLogger(__name__)
 
 binding_id = None
 
-def on_move(event):
-    if event.inaxes:
-        print(f'data coords {event.xdata} {event.ydata},',
-              f'pixel coords {event.x} {event.y}')
-
-
-def on_click(event):
-    if event.button is MouseButton.LEFT:
-        print(f'data coords {event.xdata} {event.ydata},',
-              f'pixel coords {event.x} {event.y}')
 
 class TWrapperClass:
 
@@ -414,24 +403,24 @@ def on_key(event):
 
 
 
-def main() -> None:
-    # Single input argument (optional) is filename to write output to.
-    parser = ArgumentParser()
-    parser.add_argument("filename")
-    args = parser.parse_args()
-    ana = CalibratorAnalyzer(fps=500, initial_size_sec=1800, increase_step_sec=300, before_sec=0.1, after_sec=0.1, vmax_px_per_sec=5000, doplot=True)
+# def main() -> None:
+#     # Single input argument (optional) is filename to write output to.
+#     parser = ArgumentParser()
+#     parser.add_argument("filename")
+#     args = parser.parse_args()
+#     ana = CalibratorAnalyzer(fps=500, initial_size_sec=1800, increase_step_sec=300, before_sec=0.1, after_sec=0.1, vmax_px_per_sec=5000, doplot=True)
 
-    plt.ion()
-    g = FileEyeDataGenerator(args.filename)
-    for ed in g.generate():
-        ana.step(ed)
-    print("loop done")
-    plt.ioff()
-    plt.show()
-    #plt.pause(5)
-    #ana.ana_cr(0.1,0.1,5000,doplot=True)
+#     plt.ion()
+#     g = FileEyeDataGenerator(args.filename)
+#     for ed in g.generate():
+#         ana.step(ed)
+#     print("loop done")
+#     plt.ioff()
+#     plt.show()
+#     #plt.pause(5)
+#     #ana.ana_cr(0.1,0.1,5000,doplot=True)
     
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
