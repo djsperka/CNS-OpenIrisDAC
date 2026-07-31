@@ -68,13 +68,19 @@ class AIOModule(AnalogModule):
     def disable(self):
         ao.DACSetBoardRange(ao.diOnly, 0)
 
+    def vToDAC(self, voltage):
+        vtmp = (voltage-self.v_min)/(self.v_max-self.v_min) * 2**self.bitdepth
+        return int(np.clip(vtmp, 0, 2**self.bitdepth-1))
+
     def write_channel(self, channel:int, voltage:float):
         """
         Writes a voltage to a channel. The voltage is clamped to the range [-v_max, v_max].
         """
         v_out = np.clip(voltage, self.v_min, self.v_max)
-        short_out = int((v_out + self.v_max) / self.v_max / 2 * (2**self.bitdepth))
-        ao.DACDirect(self.index, channel, short_out)
+        # short_out = int((v_out + self.v_max) / self.v_max / 2 * (2**self.bitdepth))
+        ao.DACDirect(self.index, channel, self.vToDAC(v_out))
+        # if voltage > self.v_max:
+        #     print(f"voltage {voltage} v_out {v_out} short_out {short_out} depth {self.bitdepth}")
         self.v_out[channel] = v_out
 
     def write_channels(self, voltages:np.ndarray):
