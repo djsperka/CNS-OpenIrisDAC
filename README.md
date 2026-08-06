@@ -12,26 +12,31 @@ Visit [Writing READMEs for Research Code & Software](https://data.research.corne
 
 **Short description:** This application is an analog output client for the (Dual Purkinje Image eye tracker)[https://github.com/ryan-ressmeyer/OpenIrisDPI] developed by Ryan Ressmeyer. Check the project out, along with the (wiki)[https://github.com/ryan-ressmeyer/OpenIrisDPI/wiki], a terrific resource. Our tracker hardware differs from the wiki model in some respects, but the core of the system (camera, IR source, OpenIrisDPI software) is identical to the wiki design.
 
-From the OpenIrisDAC project:
-
-
-___
 
 # PROJECT OVERVIEW
 
-**Full description:** This program acts as a client to the streaming tracking data from the OpenIrisDPI control program. It provides analog output for the tracker's measured x- and y-positions via a DAC. 
+**Full description:** This program acts as a client to the streaming tracking data from the OpenIrisDPI control program. It provides analog output for the tracker's measured x- and y-positions via a DAC, which can be used by a data acquisition process to monitor eye position in an experiment. 
 
-**Project Organization:** This project is a fork of OpenIrisDAC.
-
-**Software project size:** Provide the total size of the project or its components (uncompressed)
+**Project Organization:** This project is a fork of (OpenIrisDAC)[https://github.com/ryan-ressmeyer/OpenIrisDAC].
 
 ___
 
 # INSTALLATION
 
-**Step by step instructions:** Provide step-by-step installation instructions to install and set up your software project on a user's system 
+**Step by step instructions:** 
 
-**System requirements:** Provide system requirements, such as the operating system and any other system-level dependencies
+1. Fetch github repo to a computer.
+2. Set up a virtual env using your preferred method. Development was done using python 3.12, and I recommend that version.
+3. Prepare virtual env.
+```shell
+$ pip install -r requirements.txt
+``` 
+
+**System requirements:** 
+
+This application will only run on Windows.
+
+[!Note]: If using the (AccesIO USB-AO16-8E)[https://accesio.com/usb-data-acquisition-daq-products/#cat-analog-output-usb], the drivers must be installed. A different DAC can be used, but it will require a dac module (see dac.py and nodac.py). 
 
 **Required libraries, packages, modules:** Provide a list of required dependencies (e.g., libraries, packages, modules, etc.) [!Tip] * A package management tool can generate a list of dependencies for a project (e.g., Python’s pip freeze will output a list of installed packages in a format that can be used to create a “requirements.txt” file)
 
