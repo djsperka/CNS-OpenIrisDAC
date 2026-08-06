@@ -36,19 +36,18 @@ $ pip install -r requirements.txt
 
 This application will only run on Windows.
 
-[!Note]: If using the (AccesIO USB-AO16-8E)[https://accesio.com/usb-data-acquisition-daq-products/#cat-analog-output-usb], the drivers must be installed. A different DAC can be used, but it will require a dac module (see dac.py and nodac.py). 
-
-**Required libraries, packages, modules:** Provide a list of required dependencies (e.g., libraries, packages, modules, etc.) [!Tip] * A package management tool can generate a list of dependencies for a project (e.g., Python’s pip freeze will output a list of installed packages in a format that can be used to create a “requirements.txt” file)
-
-**Setup requirements:** Provide a description of any setup requirements (e.g., environment variables, configuration files)
-
-**Known issues:** Provide any known issues or caveats during installation. (e.g., compatibility issues or known bugs)
+If using the (AccesIO USB-AO16-8E)[https://accesio.com/usb-data-acquisition-daq-products/#cat-analog-output-usb], the drivers must be installed. A different DAC can be used, but it will require a dac module (see dac.py and nodac.py). 
 
 ___
 
 # USAGE
  
-**Step by step instructions:** Provide instructions on how run the software or execute the code after all of the required software project has been installed and include a brief description of what the expected output or behaviour should be
+**Step by step instructions:** 
+
+If a calibration process is needed, then the DAQ computer running Spike2 must be able to send information to this application. Spike2 has no networking built-in, but can use the serial port. We have used serial communication to communicate with `fixstim`, our stimulus presentation program. 
+
+
+Provide instructions on how run the software or execute the code after all of the required software project has been installed and include a brief description of what the expected output or behaviour should be
 - Provide usage examples
 - Include screenshots where appropriate
 - Document how to run any built-in tests
