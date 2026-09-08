@@ -62,7 +62,7 @@ class FakeEyeDataGenerator(EyeDataGenerator):
 
     def generate(self):
         while self.state.is_running:
-            if not self.state.calibrating:
+            if not self.state.calibrating or (self.state.calibrating and not self.fake_calfilename):
                 data = EyesData(self._makefakedata(self.t))
                 yield data
             else:
