@@ -522,7 +522,7 @@ class GUI:
             if event == sg.TIMEOUT_EVENT:
                 self.update_graph()
 
-                # Get eye data
+                # Get eye data error, if any
                 error = self.state.last_eyes_data.get_error(left_p4=self.state.left_method=='dpi', right_p4=self.state.right_method=='dpi')
                 if error:
                     self.window['error'].update(value = error, text_color='red')
@@ -670,7 +670,7 @@ class DataPipeline:
 
             if self.state.calibrating:
                 # Assign values for current calibration stuff. 
-                if not self.fake:
+                if not self.fake or (self.fake and not self.fake_file):
                     # assign dio bits to data.extra.ints[8] 
                     data.extra.ints[8] = self.state.calibration_diobits
                     data.extra.doubles[5] = self.state.calibration_vpdx
@@ -708,7 +708,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", help="File to write output to", type=str, default='')
     parser.add_argument("--fake", help="Use fake data generator instead of OpenIrisClient", action='store_true')
-    parser.add_argument("--fake-file", help="pkl file to use as fake calibration data")
+    parser.add_argument("--fake-file", help="pkl file to use as fake calibration data", type=str, default='')
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     parser.add_argument("--cal-port", help="Port of calibrator server", default=0, type=int)
