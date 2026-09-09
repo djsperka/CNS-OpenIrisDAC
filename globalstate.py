@@ -53,6 +53,8 @@ class GlobalState:
         self.calibration_fixation_x = 99999.9
         self.calibration_fixation_y = 99999.9
         self.calibration_recording = False
+        self.calibration_frame_count = 0
+        self.calibration_start_time = 0
 
         # these are parameters for the calibration analysis. 
         # TODO - add these to a settings file, and to GUI

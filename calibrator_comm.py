@@ -2,6 +2,7 @@ import socket
 from threading import Thread
 from globalstate import GlobalState
 from shared_resources import in_cal_lock
+import time
 
 class CalibratorComm(Thread):
     def __init__(self, state: GlobalState, port=8282, verbose=False):
@@ -152,6 +153,8 @@ class CalibratorComm(Thread):
         response = 'OK'
         if command.lower().startswith("calstart"):
             self.state.calibrating= True
+            self.state.calibration_frame_count = 0
+            self.state.calibration_start_time = time.monotonic()
         elif command.lower().startswith("calstop"):
             self.state.calibrating= False
         # elif command.lower().startswith("record"):

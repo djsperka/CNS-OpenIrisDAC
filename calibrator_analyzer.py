@@ -170,6 +170,7 @@ class Calibrator(Thread):
                 elif not self.globalstate.calibration_queue.empty():
                     ed = self.globalstate.calibration_queue.get()
                     self.step(ed)
+                    self.globalstate.calibration_frame_count += 1
                     if self._brecord:
                         if not bFileIsOpen:
                             # need to open a new file for this calibration data
