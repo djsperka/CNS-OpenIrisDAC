@@ -713,6 +713,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     parser.add_argument("--cal-port", help="Port of calibrator server", default=0, type=int)
     parser.add_argument("--no-cal-record", help="DO NOT record data (incl button&FRAME) during calibration", action='store_false')
+    parser.add_argument("--fps", help="Capture rate, in frames per second, of eye tracker.", type=int, default=500)
     args = parser.parse_args()
     if not args.no_cal_record:
         cal_recording_path = PlatformDirs("CNS-OpenIrisDAC", appauthor=False).user_data_path
@@ -731,6 +732,7 @@ if __name__ == "__main__":
     # with GUI() as gui:
     #     gui.window_loop(open_iris_ip='localhost', verbose=False)
     gs = GlobalState()
+    gs.calibration_fps = args.fps
     gui_thread = Thread(target=GUI(gs).window_loop, args=(False,))
     gui_thread.start()
 
