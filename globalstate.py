@@ -42,6 +42,10 @@ class GlobalState:
         self.is_mouse_mode = False
         self.mouse_mode_xy = Point(0,0)
 
+        # count frames received
+        self.frames_in = 0
+        self.frames_start_time = 0.0  # time when first frame received
+        
         # this stuff for calibration
         self.calibrating = False
         self.loading = False
@@ -53,12 +57,13 @@ class GlobalState:
         self.calibration_fixation_x = 99999.9
         self.calibration_fixation_y = 99999.9
         self.calibration_recording = False
-        self.calibration_frame_count = 0
-        self.calibration_start_time = 0
+        self.calibration_frames_in = 0          # how many get pushed into queue
+        self.calibration_frames_out = 0         # how many get popped from queue
+        self.calibration_start_time = 0.0
 
         # these are parameters for the calibration analysis. 
         # TODO - add these to a settings file, and to GUI
-        self.calibration_fps:int=500
+        self.capture_fps:int=500
         self.calibration_initial_size_sec:int=1800
         self.calibration_increase_step_sec:int = 300
         self.calibration_before_sec:float=0.1

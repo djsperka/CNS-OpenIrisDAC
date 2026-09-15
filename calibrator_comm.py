@@ -152,15 +152,13 @@ class CalibratorComm(Thread):
         """
         response = 'OK'
         if command.lower().startswith("calstart"):
-            self.state.calibrating= True
-            self.state.calibration_frame_count = 0
-            self.state.calibration_start_time = time.monotonic()
+            with in_cal_lock:
+                self.state.calibrating= True
+                self.state.calibration_frames_in = 0
+                self.state.calibration_frames_out = 0
+                self.state.calibration_start_time = time.monotonic()
         elif command.lower().startswith("calstop"):
             self.state.calibrating= False
-        # elif command.lower().startswith("record"):
-        #     self.state.calibration_recording = True
-        # elif command.lower().startswith("stoprecording"):
-        #     self.state.calibration_recording = False
         elif command.startswith("F "):
             # Handle 'F' command with a single argument formatted as "x,y,d,c"
             parts = command.split(maxsplit=1)

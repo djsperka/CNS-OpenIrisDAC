@@ -3,16 +3,16 @@ from threading import Thread, Event
 from open_iris_client import Point
 from calibrator_comm import CalibratorComm
 from calibrator_analyzer import Calibrator
+from data_pipeline import DataPipeline
+from eye_tracker_settings import EyeTrackerSettings
 import PySimpleGUI as sg
-from platformdirs import PlatformDirs as PlatformDirs
+from platformdirs import PlatformDirs
 from pathlib import Path
 import copy
 import argparse
 from dac_common import AnalogOutput, AnalogOutputPair
 from globalstate import GlobalState
-from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
 import logging
-from typing import Callable
 from shared_resources import cal_lock
 from dac_common import CalibrationParameters
 
@@ -645,59 +645,6 @@ class GUI:
 
 
 
-class DataPipeline:
-    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str='', fake_file: str='', cal_recording_path=None):
-        self.state = state
-        self.server_address = server_address
-        self.port = port
-        self.fake = fake        
-        self.output = output
-        self.output_file = None
-        self.fake_file = fake_file
-        self.cal_recording_path = cal_recording_path
-        self.cal_recording_fd = None
-
-    def run(self, debug=False):
-
-        # create generator
-        if self.fake:
-            generator = FakeEyeDataGenerator(self.state, self.fake_file)
-        else:  
-            generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
-
-        for data in generator.generate():    
-            self.state.last_eyes_data = data
-
-            if self.state.calibrating:
-                # Assign values for current calibration stuff. 
-                if not self.fake or (self.fake and not self.fake_file):
-                    # assign dio bits to data.extra.ints[8] 
-                    data.extra.ints[8] = self.state.calibration_diobits
-                    data.extra.doubles[5] = self.state.calibration_vpdx
-                    data.extra.doubles[6] = self.state.calibration_vpdy
-                    data.extra.doubles[7] = self.state.calibration_fixation_x
-                    data.extra.doubles[8] = self.state.calibration_fixation_y
-                # put the EyesData into the queue - it will get picked up by the calibration thread
-                self.state.calibration_queue.put(data)
-
-            # transform current signal and write to appropriate output
-            if not self.state.is_mouse_mode:
-                left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
-                left_output = self.state.left_cal.transform(left_output)
-                self.state.left_output.write(left_output)
-            else:
-                self.state.left_output.write(self.state.mouse_mode_xy)
-            
-            right_output = data.right.cr - (data.right.pupil if self.state.right_method == 'pcr' else data.right.p4)
-            right_output = self.state.right_cal.transform(right_output)
-            self.state.right_output.write(right_output)
-
-            pupil_output = Point(data.left.pupil_area, data.right.pupil_area)
-            pupil_output = self.state.pupil_cal.transform(pupil_output)
-            self.state.pupil_output.write(pupil_output)
-            if debug:
-                print(data)
-                print(f'{left_output}, {right_output}, {pupil_output}')
 
 if __name__ == "__main__":
     from threading import Thread
@@ -713,7 +660,8 @@ if __name__ == "__main__":
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     parser.add_argument("--cal-port", help="Port of calibrator server", default=0, type=int)
     parser.add_argument("--no-cal-record", help="DO NOT record data (incl button&FRAME) during calibration", action='store_false')
-    parser.add_argument("--fps", help="Capture rate, in frames per second, of eye tracker.", type=int, default=500)
+    parser.add_argument("--fps", help="Capture rate, in frames per second, of eye tracker.", type=int, default=0)
+    parser.add_argument("--tracker-folder", help="Folder with the EyeTrackerSettings.xml file", type=str, default='')
     args = parser.parse_args()
     if not args.no_cal_record:
         cal_recording_path = PlatformDirs("CNS-OpenIrisDAC", appauthor=False).user_data_path
@@ -728,11 +676,15 @@ if __name__ == "__main__":
         logger.warning('Using fake data generator')
         kwargs = {}
 
-
-    # with GUI() as gui:
-    #     gui.window_loop(open_iris_ip='localhost', verbose=False)
     gs = GlobalState()
-    gs.calibration_fps = args.fps
+
+    # get fps if not on command line
+    if not args.fps:
+        ets = EyeTrackerSettings(tracker_folder=args.tracker_folder)
+        gs.capture_fps = ets.get_frame_rate()
+    else:
+        gs.capture_fps = args.fps    
+
     gui_thread = Thread(target=GUI(gs).window_loop, args=(False,))
     gui_thread.start()
 

@@ -1,6 +1,7 @@
 import numpy as np 
 from scipy.optimize import curve_fit as curve_fit
 from open_iris_client import EyeData, EyesData, ExtraData, Point
+from shared_resources import in_cal_lock
 from dac_common import CalibrationParameters
 from dataclasses import dataclass
 from argparse import ArgumentParser
@@ -90,7 +91,7 @@ class Calibrator(Thread):
         self._state = self.States.IDLE
 
     def initialize_calibration(self):
-        self._fps = self.globalstate.calibration_fps
+        self._fps = self.globalstate.capture_fps
         self._max_frames = np.floor(self.globalstate.calibration_initial_size_sec * self._fps)
         self._increase_step_frames = np.floor(self.globalstate.calibration_increase_step_sec * self._fps)
         self._nbefore = int(np.floor(self.globalstate.calibration_before_sec * self._fps))
@@ -170,7 +171,8 @@ class Calibrator(Thread):
                 elif not self.globalstate.calibration_queue.empty():
                     ed = self.globalstate.calibration_queue.get()
                     self.step(ed)
-                    self.globalstate.calibration_frame_count += 1
+                    with in_cal_lock:
+                        self.globalstate.calibration_frames_out += 1
                     if self._brecord:
                         if not bFileIsOpen:
                             # need to open a new file for this calibration data
