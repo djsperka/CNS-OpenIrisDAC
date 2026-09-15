@@ -255,14 +255,18 @@ class GUI:
         self.cal_graph = sg.Graph(canvas_size=CAL_GRAPH_CANVAS_SIZE, graph_bottom_left=CAL_GRAPH_BOTTOM_LEFT, graph_top_right=CAL_GRAPH_TOP_RIGHT, background_color='white', key='graph')
         graph_column = sg.Column([[self.raw_graph],[self.cal_graph]], element_justification='center')
 
-        # second column for other stuff. Initially, a button to test calibration.
+        # second column for other stuff.
+        self.frames_in_text = sg.Text('0')
+        self.frames_out_text = sg.Text('0')
+        self.frames_diff_text = sg.Text('0')
         other_column = sg.Column([[sg.Button('Fake cal', key='start-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Stop cal', key='stop-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Try to fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Edit points', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Accept fit', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Load', key='cal-load', enable_events=True, button_color='PaleVioletRed4')]])
+                                  [sg.Button('Load', key='cal-load', enable_events=True, button_color='PaleVioletRed4')],
+                                  [sg.VPush()], [sg.Text('Frames in: '), self.frames_in_text], [sg.Text('Frames out: '), self.frames_out_text], [sg.Text('Diff: '), self.frames_diff_text]])
         calibration_layout = [[graph_column,other_column]]        
         ct = sg.Tab('Calibration', calibration_layout)
 
@@ -363,10 +367,16 @@ class GUI:
                 cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
 
     def update_calibration_graphs(self):
+        """Called on timer to update calibration graphs.
+        """
         m = self.state.calibrator.measurements
         b, tempCal = self.state.calibrator.get_cal()
         self.update_raw_graph(self.raw_graph, m)
         self.update_cal_graph(self.cal_graph, m, tempCal)
+        self.frames_in_text.text = int(self.state.calibration_frames_in)
+        self.frames_out_text.text = int(self.state.calibration_frames_out)
+        self.frames_diff_text.text = int(self.state.calibration_frames_in - self.state.calibration_frames_out)
+        
 
     def window_loop(self, verbose=False):
         
