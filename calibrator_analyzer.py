@@ -89,6 +89,7 @@ class Calibrator(Thread):
         # initialize first, skip state INITIALIZE
         self.initialize_calibration()
         self._state = self.States.IDLE
+        logger.info("calibrator is ready")
 
     def initialize_calibration(self):
         self._fps = self.globalstate.capture_fps
