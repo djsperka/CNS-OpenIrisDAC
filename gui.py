@@ -524,9 +524,11 @@ class GUI:
 
             # update calibration graphs
             if event == 'calibration-graphs':
-                if self.state.calibrator and self.state.calibrator.invalidated:
-                    self.update_calibration_graphs()
-                    self.state.calibrator.invalidated = False
+                self.update_calibration_graphs()
+
+                # if self.state.calibrator:
+                #     self.update_calibration_graphs()
+                #     self.state.calibrator.invalidated = False
 
             # update graph and errors on timeout (refresh)
             if event == sg.TIMEOUT_EVENT:
