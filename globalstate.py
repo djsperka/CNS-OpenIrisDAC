@@ -4,6 +4,8 @@ from open_iris_client import EyesData, Point
 import os
 from queue import Queue
 from platformdirs import PlatformDirs
+import logging
+logger = logging.getLogger("GlobalState")
 
 DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac')
 if DAC_BACKEND == 'dac':
@@ -64,6 +66,7 @@ class GlobalState:
         # these are parameters for the calibration analysis. 
         # TODO - add these to a settings file, and to GUI
         self.capture_fps:int=500
+        self.calibration_eye:str='Left'
         self.calibration_initial_size_sec:int=1800
         self.calibration_increase_step_sec:int = 300
         self.calibration_before_sec:float=0.1
@@ -86,7 +89,7 @@ class GlobalState:
     def discover_analog_modules(self):
         # TODO Move this to global state (also save serial numbers?)
         self.module_list = discover_ao_modules()
-        print(f"Found {len(self.module_list)} Output Devices: {self.module_list}")
+        logger.info(f"Found {len(self.module_list)} Output Devices: {self.module_list}")
         
         self.output_dict = {}
         for module in self.module_list:
@@ -96,7 +99,7 @@ class GlobalState:
                     key = key[:len(module.name)] + '-2' + key[len(module.name):]
                 self.output_dict[key] = AnalogOutput(module, channel)
 
-        print(f"Found {len(self.output_dict)} Output Channels: {self.output_dict.keys()}")
+        logger.info(f"Found {len(self.output_dict)} Output Channels: {self.output_dict.keys()}")
 
     def save(self, path:Path|None = None):
         if path is None:
@@ -117,7 +120,7 @@ class GlobalState:
             path = self.save_path
 
         if not path.exists():
-            print('No save directory found.')
+            logger.error(f'Folder for saving state {self.save_path} was not found.')
             return
         # load calibrations
         try:
@@ -125,7 +128,7 @@ class GlobalState:
             self.right_cal.load(path / 'right_cal.txt')
             self.pupil_cal.load(path / 'pupil_cal.txt')
         except:
-            print('Error loading calibration files.')
+            logger.error('Error loading calibration files.')
         # load methods
         try:
             with open(path / 'methods.txt', 'r') as f:

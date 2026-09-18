@@ -1,23 +1,29 @@
 import os
 assert os.name == 'nt', 'DAC only works on Windows'
 import numpy as np
-from dac_common import AnalogModule, AnalogOutput, AnalogOutputPair, CalibrationParameters
+from dac_common import AnalogModule
+import logging
+logger = logging.getLogger("DACModule")
 has_aio = False
 try:
     import AIOUSB as ao
     has_aio = True
 except Exception as e:
-    print('Error importing AIOUSB. Ignore if using NI modules.')
+    logger.warning('Error importing AIOUSB. Ignore if using NI modules.')
     print(e)
 
+# if AIOUSB found, do not attempt to load nidaq module
+
 has_daqmx = False
-try:
-    import nidaqmx
-    import nidaqmx.stream_writers
-    import nidaqmx.system
-except Exception as e:
-    print('Error importing nidaqmx. Ignore if using AIOUSB.')
-    print(e)
+if not has_aio:
+    try:
+        import nidaqmx
+        import nidaqmx.stream_writers
+        import nidaqmx.system
+    except Exception as e:
+        print('Error importing nidaqmx. Ignore if using AIOUSB.')
+        print(e)
+        raise RuntimeError("No DAC module found.")
 
 def discover_ni_modules():
     """

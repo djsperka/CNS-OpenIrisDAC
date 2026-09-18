@@ -2,7 +2,8 @@ import os
 import wmi
 import xmltodict
 import pprint
-
+import logging
+logger = logging.getLogger("EyeTrackerSettings")
 
 class EyeTrackerSettings:
     def __init__(self, tracker_folder: str = ''):
@@ -33,7 +34,7 @@ class EyeTrackerSettings:
         if not os.path.isfile(self.settings_file):
             raise RuntimeError(f"Eye tracker settings file not found at {self.settings_file}")
         
-    def get_frame_rate(self, system_type: str = 'Spinnaker Single Camera'):
+    def get_frame_rate(self):
         """Get the frame capture rate for the given system type.
 
         Args:
@@ -46,17 +47,28 @@ class EyeTrackerSettings:
             integer: Frame capture rate, in frames per second.
         """
         i_rate = 0
+        s_eye = 'Unknown'
         found_type = False
+        logger.info(f"Opening settings file {self.settings_file}")
         with open(self.settings_file, "rb") as fp:
             d=xmltodict.parse(fp)
+
+            # get current gtracker type. 
+            # This must be "Spinnaker Single Camera", because we are only using a single eye for calibration.
+            # This can be expanded, if we adopt a new setting (within this app, not the tracker itself) that 
+            # specifies the eye to use for calibration. 
+            system_type = d['EyeTrackerSettings']['EyeTrackerSystem']
+            logger.info(f"Current system type is \"{system_type}\"")
             d2 = d['EyeTrackerSettings']['AllEyeTrackerSystemSettings']['item']
             for d3 in d2:
                 if d3['key']['string'] == system_type:
+                    s_eye = d3['value']['EyeTrackingSystemSettings']['Eye']
                     s_rate = d3['value']['EyeTrackingSystemSettings']['FrameRate']
                     i_rate = int(s_rate)
                     found_type = True
+                    logger.info(f"Tracking eye: {s_eye}, frame capture rate is {i_rate}fps")
                     break
             if not found_type:
                 raise RuntimeError(f"Cannot find system type {system_type} in {self.settings_file}")
-        return i_rate
+        return i_rate, s_eye
     

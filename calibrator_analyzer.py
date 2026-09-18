@@ -18,7 +18,7 @@ from enum import Enum
 import datetime
 import pickle
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("Calibrator")
 
 binding_id = None
 

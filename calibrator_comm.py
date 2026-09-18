@@ -3,9 +3,11 @@ from threading import Thread
 from globalstate import GlobalState
 from shared_resources import in_cal_lock
 import time
+import logging
+logger = logging.getLogger("CalibratorComm")
 
 class CalibratorComm(Thread):
-    def __init__(self, state: GlobalState, port=8282, verbose=False):
+    def __init__(self, state: GlobalState, port=8282):
         """
         Initialize a TCP communication server for calibrator commands.
         
@@ -20,7 +22,6 @@ class CalibratorComm(Thread):
         self.client_socket = None
         self.running = False
         self.recording = False
-        self.verbose = verbose
 
     def run(self):
         """Run the TCP server loop, accepting and handling connections."""
@@ -34,18 +35,17 @@ class CalibratorComm(Thread):
             while self.running:
                 # Accept a connection
                 try:
-                    print("calibrator: waiting for client...")
+                    logger.info(f"waiting for client on port {self.port}...")
                     conn, addr = self.server_socket.accept()
                 except OSError:
                     break
                 self.client_socket = conn
-                if self.verbose:
-                    print(f"Accepted connection from {self.client_socket.getpeername()[0]}")
+                logger.info(f"Accepted connection from {self.client_socket.getpeername()[0]}")
                 
                 try:
                     self._handle_client(conn)
                 except Exception as e:
-                    print(f"Error handling client: {e}")
+                    logger.error(f"Error handling client: {e}")
                 finally:
                     conn.close()
                     self.client_socket = None
@@ -78,7 +78,7 @@ class CalibratorComm(Thread):
                     hello_msg = line.strip()
                     break
                 else:
-                    print(f"calibrator: partial command {recv_buffer}")
+                    logger.info(f"calibrator: partial command {recv_buffer}")
             except socket.timeout:
                 # keep waiting for HELLO
                 continue
@@ -87,8 +87,7 @@ class CalibratorComm(Thread):
             conn.send(b"ERROR: Expected HELLO;")
             return
         else:
-            if self.verbose:
-                print("Got HELLO from client. Waiting for commands...")
+            logger.info("Got HELLO from client. Waiting for commands...")
 
         # Send OK response
         conn.send(b"OK;")
@@ -100,22 +99,19 @@ class CalibratorComm(Thread):
                 data = conn.recv(1024)
                 if not data:
                     # Client disconnected
-                    if self.verbose:
-                        print("Client disconnected")
+                    logger.info("Client disconnected")
                     break
                 else:
-                    print(f"received {len(data.decode())} bytes: {data.decode()}")
+                    logger.info(f"received {len(data.decode())} bytes: {data.decode()}")
                     btest = True
 
                 recv_buffer += data.decode()
-                if btest:
-                    print(f"recv buffer: {recv_buffer}")
-
+  
                 # Process all complete lines in the buffer
                 while ";" in recv_buffer:
                     line, recv_buffer = recv_buffer.split(";", 1)
                     command = line.strip()
-                    print(f"command {command}")
+                    logger.info(f"command {command}")
 
                     # Parse and execute command
                     response = self.parse_command(command)
@@ -127,12 +123,12 @@ class CalibratorComm(Thread):
                 # Short timeout; loop back to receive more data
                 continue
             except ConnectionResetError:
-                print(f"Connection to calibrator was closed.")
+                logger.error(f"Connection to calibrator was closed.")
                 break
 
             except Exception as e:
-                print(f"Error in command handling: {e}")
-                print(f"{e.__class__}")
+                logger.error(f"Error in command handling: {e}")
+                logger.error(f"{e.__class__}")
                 break
     
     def parse_command(self, command: str) -> str:
@@ -177,7 +173,7 @@ class CalibratorComm(Thread):
                 c = fields[3]
             except ValueError:
                 return "ERROR: x, y, and d must be numbers"            
-            print(f"Received F command with x={x}, y={y}, d={d}, c={c}")
+            logger.info(f"Received F command with x={x}, y={y}, d={d}, c={c}")
             with in_cal_lock:
                 self.state.calibration_fixation_x = x
                 self.state.calibration_fixation_y = y
@@ -215,7 +211,7 @@ class CalibratorComm(Thread):
     def shutdown(self):
         """Shutdown the server and disconnect any client.
         """
-        print("Shutting down calibrator server...")
+        logger.info("Shutting down calibrator server...")
         self.running = False
 
         if self.client_socket:
