@@ -1,30 +1,34 @@
 from globalstate import GlobalState
-from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
+#from generator import FakeEyeDataGenerator, OpenIrisClientGenerator
+from generator import EyeDataGenerator
 from shared_resources import in_cal_lock
 from open_iris_client import Point
 import time
 
 class DataPipeline:
-    def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str='', fake_file: str='', cal_recording_path=None):
+    #def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str='', fake_file: str='', cal_recording_path=None):
+    def __init__(self, state:GlobalState, generator:EyeDataGenerator, populate_extra:bool = True):
         self.state = state
-        self.server_address = server_address
-        self.port = port
-        self.fake = fake        
-        self.output = output
-        self.output_file = None
-        self.fake_file = fake_file
-        self.cal_recording_path = cal_recording_path
-        self.cal_recording_fd = None
+        self.generator = generator
+        self.populate_extra = populate_extra
+        # self.server_address = server_address
+        # self.port = port
+        # self.fake = fake        
+        # self.output = output
+        # self.output_file = None
+        # self.fake_file = fake_file
+        # self.cal_recording_path = cal_recording_path
+        # self.cal_recording_fd = None
 
     def run(self, debug=False):
 
-        # create generator
-        if self.fake:
-            generator = FakeEyeDataGenerator(self.state, self.fake_file)
-        else:  
-            generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
+        # # create generator
+        # if self.fake:
+        #     generator = FakeEyeDataGenerator(self.state, self.fake_file)
+        # else:  
+        #     generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
 
-        for data in generator.generate():    
+        for data in self.generator.generate():    
             self.state.last_eyes_data = data
             if not self.state.frames_start_time:
                 self.state.frames_start_time = time.monotonic()
@@ -32,13 +36,14 @@ class DataPipeline:
 
             if self.state.calibrating:
                 # Assign values for current calibration stuff. 
-                if not self.fake or (self.fake and not self.fake_file):
+                if self.populate_extra:
                     # assign dio bits to data.extra.ints[8] 
                     data.extra.ints[8] = self.state.calibration_diobits
                     data.extra.doubles[5] = self.state.calibration_vpdx
                     data.extra.doubles[6] = self.state.calibration_vpdy
                     data.extra.doubles[7] = self.state.calibration_fixation_x
                     data.extra.doubles[8] = self.state.calibration_fixation_y
+
                 # put the EyesData into the queue - it will get picked up by the calibration thread
                 self.state.calibration_queue.put(data)
                 with in_cal_lock:

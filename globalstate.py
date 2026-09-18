@@ -1,6 +1,7 @@
 from pathlib import Path
 from dac_common import CalibrationParameters, AnalogOutputPair, AnalogOutput
 from open_iris_client import EyesData, Point
+# from calibrator_analyzer import Calibrator
 import os
 from queue import Queue
 from platformdirs import PlatformDirs
@@ -73,7 +74,7 @@ class GlobalState:
         self.calibration_after_sec:float=0.1
         self.calibration_vmax_px_per_sec:float=5000
         self.calibration_queue:Queue=Queue()
-        self.calibrator=None
+        # self.calibrator:Calibrator|None=None
 
         # load calibration 
         self.load()

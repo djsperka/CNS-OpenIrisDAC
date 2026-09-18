@@ -5,6 +5,7 @@ from calibrator_comm import CalibratorComm
 from calibrator_analyzer import Calibrator
 from data_pipeline import DataPipeline
 from eye_tracker_settings import EyeTrackerSettings
+from generator import OpenIrisClientGenerator, FakeEyeDataGenerator
 import PySimpleGUI as sg
 from platformdirs import PlatformDirs
 from pathlib import Path
@@ -114,8 +115,9 @@ class GUIField:
 
 class GUI:
     colorlist = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075']
-    def __init__(self, state:GlobalState) -> None:
+    def __init__(self, state:GlobalState, calibrator:Calibrator|None) -> None:
         self.state = state
+        self.calibrator = calibrator
 
         menu_def = [['File', ['Save Config', 'Load Config', 'Exit']]]
 
@@ -369,13 +371,15 @@ class GUI:
     def update_calibration_graphs(self):
         """Called on timer to update calibration graphs.
         """
-        m = self.state.calibrator.measurements
-        b, tempCal = self.state.calibrator.get_cal()
-        self.update_raw_graph(self.raw_graph, m)
-        self.update_cal_graph(self.cal_graph, m, tempCal)
-        self.frames_in_text.text = int(self.state.calibration_frames_in)
-        self.frames_out_text.text = int(self.state.calibration_frames_out)
-        self.frames_diff_text.text = int(self.state.calibration_frames_in - self.state.calibration_frames_out)
+
+        if self.calibrator is not None:
+            m = self.calibrator.measurements
+            b, tempCal = self.calibrator.get_cal()
+            self.update_raw_graph(self.raw_graph, m)
+            self.update_cal_graph(self.cal_graph, m, tempCal)
+            self.frames_in_text.text = int(self.state.calibration_frames_in)
+            self.frames_out_text.text = int(self.state.calibration_frames_out)
+            self.frames_diff_text.text = int(self.state.calibration_frames_in - self.state.calibration_frames_out)
         
 
     def window_loop(self, verbose=False):
@@ -483,52 +487,49 @@ class GUI:
                     self.state.load(Path(load_dir))
                     self.update_sliders()
 
-            # for testing only!
-            if event == 'start-fake-cal':
-                self.state.calibrating = True
+            if self.calibrator is not None:
+                # for testing only!
+                if event == 'start-fake-cal':
+                    self.state.calibrating = True
 
-            if event == 'stop-fake-cal':
-                logger.info("stop-fake-cal")
-                self.state.calibrating = False
+                if event == 'stop-fake-cal':
+                    logger.info("stop-fake-cal")
+                    self.state.calibrating = False
 
-            if event == 'cal-edit-points':
-                b, m = self.edit_points(self.state.calibrator.measurements)
-                if b:
-                    self.state.calibrator.measurements = m
+                if event == 'cal-edit-points':
+                    b, m = self.edit_points(self.calibrator.measurements)
+                    if b:
+                        self.calibrator.measurements = m
 
-            if event == 'do-cal-fit':
-                self.state.calibrator.dofit()
+                if event == 'do-cal-fit':
+                    self.calibrator.dofit()
 
-            if event == 'cal-clear':
-                self.state.calibrator.clear_cal()
+                if event == 'cal-clear':
+                    self.calibrator.clear_cal()
 
-            if event == 'cal-accept':
-                b, cal = self.state.calibrator.get_cal()
-                if b:
-                    with cal_lock:
-                        self.state.left_cal.x_bias = cal.x_bias
-                        self.state.left_cal.y_bias = cal.y_bias
-                        self.state.left_cal.x_gain = cal.x_gain
-                        self.state.left_cal.y_gain = cal.y_gain
-                        self.state.left_cal.rotation = cal.rotation
-                    self.update_sliders()   # updates calibration values in gui. Output
-                    
-                else:
-                    logger.error(f"Calibrator does not have a valid calibration.")
+                if event == 'cal-accept':
+                    b, cal = self.calibrator.get_cal()
+                    if b:
+                        with cal_lock:
+                            self.state.left_cal.x_bias = cal.x_bias
+                            self.state.left_cal.y_bias = cal.y_bias
+                            self.state.left_cal.x_gain = cal.x_gain
+                            self.state.left_cal.y_gain = cal.y_gain
+                            self.state.left_cal.rotation = cal.rotation
+                        self.update_sliders()   # updates calibration values in gui. Output
+                        
+                    else:
+                        logger.error(f"Calibrator does not have a valid calibration.")
 
-            if event == 'cal-load':
-                file_to_load = sg.popup_get_file('Select a cal-xy file to load', initial_folder=str(self.state.data_path), file_types=(('xy files', '.xy'),), no_window=True)
-                # Build a list of tuples for each file type the file dialog should display
-                if file_to_load:
-                    self.state.calibrator.load_measurements(file_to_load)
+                if event == 'cal-load':
+                    file_to_load = sg.popup_get_file('Select a cal-xy file to load', initial_folder=str(self.state.data_path), file_types=(('xy files', '.xy'),), no_window=True)
+                    # Build a list of tuples for each file type the file dialog should display
+                    if file_to_load:
+                        self.calibrator.load_measurements(file_to_load)
 
-            # update calibration graphs
-            if event == 'calibration-graphs':
-                self.update_calibration_graphs()
-
-                # if self.state.calibrator:
-                #     self.update_calibration_graphs()
-                #     self.state.calibrator.invalidated = False
+                # update calibration graphs
+                if event == 'calibration-graphs':
+                    self.update_calibration_graphs()
 
             # update graph and errors on timeout (refresh)
             if event == sg.TIMEOUT_EVENT:
@@ -704,8 +705,13 @@ if __name__ == "__main__":
         gs.calibration_eye = args.eye
     logger.info(f"Using {gs.calibration_eye} eye for calibration.")
     logger.info(f"Using capture frame rate of {gs.capture_fps}fps for calibration measurements")
-    gui_thread = Thread(target=GUI(gs).window_loop, args=(False,))
-    gui_thread.start()
+
+    # create a generator for the pipeline
+    if args.fake:
+        generator = FakeEyeDataGenerator(gs)
+    else:  
+        generator = OpenIrisClientGenerator(gs, args.address, args.port)
+
 
     # start calibrator server if specified
     calibrator_comm_thread = None
@@ -716,14 +722,18 @@ if __name__ == "__main__":
         calibrator_comm_thread = CalibratorComm(gs, port=args.cal_port)
         calibrator_comm_thread.start()
         calibrator_ana_thread = Calibrator(gs, brecord=not args.no_cal_record)
-        gs.calibrator = calibrator_ana_thread
+        # gs.calibrator = calibrator_ana_thread
         calibrator_ana_thread.start()
         dio_stop_event = Event()
         dio_thread = DIOThread(dio_stop_event, gs)
         dio_thread.start()
 
+    gui_thread = Thread(target=GUI(gs, calibrator_ana_thread).window_loop, args=(False,))
+    gui_thread.start()
+
     # start data pipeline
-    dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, cal_recording_path=cal_recording_path, fake_file=args.fake_file).run, args=(False,))
+    #dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, cal_recording_path=cal_recording_path, fake_file=args.fake_file).run, args=(False,))
+    dp_thread = Thread(target=DataPipeline(gs, generator).run, args=(False,))
     dp_thread.start()
 
     dp_thread.join()

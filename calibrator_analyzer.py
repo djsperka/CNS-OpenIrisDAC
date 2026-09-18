@@ -1,12 +1,9 @@
 import numpy as np 
 from scipy.optimize import curve_fit as curve_fit
-from open_iris_client import EyeData, EyesData, ExtraData, Point
+from open_iris_client import EyesData, Point
 from shared_resources import in_cal_lock
 from dac_common import CalibrationParameters
 from dataclasses import dataclass
-from argparse import ArgumentParser
-from pathlib import Path
-from generator import FileEyeDataGenerator
 from typing import List
 from collections import defaultdict as defaultdict
 import time
