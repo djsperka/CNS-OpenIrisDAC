@@ -236,7 +236,10 @@ class Calibrator(Thread):
 
     def step(self, ed: EyesData):
         data_ok = True
-        if ed.left.pupil.x == 0 or ed.left.pupil.y == 0:
+
+        # I'm not sure what constitutes bad pupil data. 
+        # assume that x should be in [0,720] and y in [0,450]
+        if ed.left.pupil.x < 0 or ed.left.pupil.x > 720 or ed.left.pupil.y < 0 or ed.left.pupil.y > 450:
             self._pupil_xy[:, self._counter] = np.nan
             data_ok = False
         else:
@@ -256,7 +259,7 @@ class Calibrator(Thread):
         else:
             self._p4_xy[0, self._counter] = ed.left.p4.x
             self._p4_xy[1, self._counter] = ed.left.p4.y
-            
+
         button_is_pressed = ed.extra.ints[8] & 0x1
         framesig_present = ed.extra.ints[0] & 0x1
 
@@ -264,20 +267,24 @@ class Calibrator(Thread):
             if framesig_present:
                 self._framesig_on_at = self._counter
                 self._framesig_on = True
+                logger.info("Frame sig ON")
         else:
             # framesig_on is True, meaning the last time through the FRAME signal was present.
             # We only need to check if framesig is not present this time.
             if not framesig_present:
                 self._framesig_on = False
+                logger.info("Frame sig OFF")
 
         if self._button_up:
             if button_is_pressed:
+                logger.info("button DOWN")
                 self._button_up = False
                 if data_ok:
                     self._button_list.append(ButtonPressInfo(self._counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
 
         else:
             if not button_is_pressed:
+                logger.info("button UP")
                 self._button_up = True
     
         self._counter += 1        
