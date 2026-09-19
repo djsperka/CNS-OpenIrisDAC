@@ -1,5 +1,5 @@
 from globalstate import GlobalState
-from open_iris_client import OpenIrisClient, EyesData
+from open_iris_client import OpenIrisClient, EyesData, Point
 import time
 import pickle
 import math
@@ -33,6 +33,37 @@ fake_data = {
         'Extra': {'Ints': [12, 0, 0, 0, 0, 0, 0, 0, 0], 'Doubles': [0, 0, 0, 0, 0, 0, 0, 0, 0]}}
 
 
+
+class OpenIrisClientGenerator(EyeDataGenerator):
+    def __init__(self, state:GlobalState, server_address='localhost', port=9003):
+        super().__init__(state)
+        self.server_address = server_address
+        self.port = port
+
+    def generate(self):
+        with OpenIrisClient(self.server_address, self.port) as client:
+            while self.state.is_running:
+                data = client.fetch_next_data()
+                yield data
+
+
+class FakeOpenIrisClientGenerator(EyeDataGenerator):
+    def __init__(self, state:GlobalState, server_address='localhost', port=9003):
+        super().__init__(state)
+        self.server_address = server_address
+        self.port = port
+
+    def generate(self):
+        with OpenIrisClient(self.server_address, self.port) as client:
+            while self.state.is_running:
+                data = client.fetch_next_data()
+                if self.state.calibrating:
+                    data.left.pupil = Point(0,0)
+                    data.left.cr = Point(self.state.calibration_fixation_x * 5, self.state.calibration_fixation_y * 5)
+                    data.left.p4 = Point(5, 5)
+                yield data
+
+
 class FakeEyeDataGenerator(EyeDataGenerator):
     def __init__(self, state:GlobalState, fake_calfilename:str=''):
         super().__init__(state)
@@ -52,16 +83,24 @@ class FakeEyeDataGenerator(EyeDataGenerator):
         """
 
         fake_data['Left']['FrameNumber'] = t
-        theta = self.t*math.pi/500
-        r = 15
-        fake_data['Left']['Pupil']['Center']['X'] = 0
-        fake_data['Left']['Pupil']['Center']['Y'] = 0
-        fake_data['Left']['CRs'][0]['X'] = r*math.cos(theta)
-        fake_data['Left']['CRs'][0]['Y'] = r*math.sin(theta)
+        if not self.state.calibrating:
+            theta = self.t*math.pi/500
+            r = 15
+            fake_data['Left']['Pupil']['Center']['X'] = 0
+            fake_data['Left']['Pupil']['Center']['Y'] = 0
+            fake_data['Left']['CRs'][0]['X'] = r*math.cos(theta)
+            fake_data['Left']['CRs'][0]['Y'] = r*math.sin(theta)
+        else:
+            # make fake data look like it is calibrating
+            fake_data['Left']['Pupil']['Center']['X'] = 0
+            fake_data['Left']['Pupil']['Center']['Y'] = 0
+            fake_data['Left']['Pupil']['Center']['X'] = self.state.calibration_fixation_x * 5
+            fake_data['Left']['Pupil']['Center']['Y'] = self.state.calibration_fixation_y * 5
         return fake_data
 
     def generate(self):
         while self.state.is_running:
+            time.sleep(0.01)    # simulate 100Hz
             if not self.state.calibrating or (self.state.calibrating and not self.fake_calfilename):
                 data = EyesData(self._makefakedata(self.t))
                 yield data
@@ -87,17 +126,7 @@ class FakeEyeDataGenerator(EyeDataGenerator):
             self.t += 1
             time.sleep(0.001)
 
-class OpenIrisClientGenerator(EyeDataGenerator):
-    def __init__(self, state:GlobalState, server_address='localhost', port=9003):
-        super().__init__(state)
-        self.server_address = server_address
-        self.port = port
 
-    def generate(self):
-        with OpenIrisClient(self.server_address, self.port) as client:
-            while self.state.is_running:
-                data = client.fetch_next_data()
-                yield data
 
 class FileEyeDataGenerator(EyeDataGenerator):
     def __init__(self, filename):
