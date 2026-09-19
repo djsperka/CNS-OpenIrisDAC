@@ -5,7 +5,7 @@ from calibrator_comm import CalibratorComm
 from calibrator_analyzer import Calibrator
 from data_pipeline import DataPipeline
 from eye_tracker_settings import EyeTrackerSettings
-from generator import OpenIrisClientGenerator, FakeEyeDataGenerator
+from generator import OpenIrisClientGenerator, FakeOpenIrisClientGenerator
 import PySimpleGUI as sg
 from platformdirs import PlatformDirs
 from pathlib import Path
@@ -377,16 +377,16 @@ class GUI:
             b, tempCal = self.calibrator.get_cal()
             self.update_raw_graph(self.raw_graph, m)
             self.update_cal_graph(self.cal_graph, m, tempCal)
-            self.frames_in_text.text = int(self.state.calibration_frames_in)
-            self.frames_out_text.text = int(self.state.calibration_frames_out)
-            self.frames_diff_text.text = int(self.state.calibration_frames_in - self.state.calibration_frames_out)
+            self.frames_in_text.update(self.state.calibration_frames_in)
+            self.frames_out_text.update(self.state.calibration_frames_out)
+            self.frames_diff_text.update(self.state.calibration_frames_in - self.state.calibration_frames_out)
         
 
     def window_loop(self, verbose=False):
         
         self.window = sg.Window('OpenIrisClient', self.layout, finalize=True)
         self.graph.bind('<Motion>', '-mouse-motion')
-        self.window.timer_start(500, key='calibration-graphs', repeating=True)
+        #TEMP MOVE UPDATE TO REGULAR TIMEOUT self.window.timer_start(500, key='calibration-graphs', repeating=True)
         first = True
         while self.state.is_running:
             event, values = self.window.read(timeout=20) # 20ms = 50Hz
@@ -534,6 +534,7 @@ class GUI:
             # update graph and errors on timeout (refresh)
             if event == sg.TIMEOUT_EVENT:
                 self.update_graph()
+                self.update_calibration_graphs()    # TEMP HACK
 
                 # Get eye data error, if any
                 error = self.state.last_eyes_data.get_error(left_p4=self.state.left_method=='dpi', right_p4=self.state.right_method=='dpi')
@@ -708,7 +709,7 @@ if __name__ == "__main__":
 
     # create a generator for the pipeline
     if args.fake:
-        generator = FakeEyeDataGenerator(gs)
+        generator = FakeOpenIrisClientGenerator(gs, args.address, args.port)
     else:  
         generator = OpenIrisClientGenerator(gs, args.address, args.port)
 
