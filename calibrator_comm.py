@@ -93,7 +93,6 @@ class CalibratorComm(Thread):
         conn.send(b"OK;")
 
         # Process commands: buffer until ';' then handle full line
-        btest=False
         while True:
             try:
                 data = conn.recv(1024)
@@ -101,9 +100,6 @@ class CalibratorComm(Thread):
                     # Client disconnected
                     logger.info("Client disconnected")
                     break
-                else:
-                    logger.info(f"received {len(data.decode())} bytes: {data.decode()}")
-                    btest = True
 
                 recv_buffer += data.decode()
   
@@ -111,7 +107,6 @@ class CalibratorComm(Thread):
                 while ";" in recv_buffer:
                     line, recv_buffer = recv_buffer.split(";", 1)
                     command = line.strip()
-                    logger.info(f"command {command}")
 
                     # Parse and execute command
                     response = self.parse_command(command)
@@ -154,6 +149,7 @@ class CalibratorComm(Thread):
                 self.state.calibration_frames_out = 0
                 self.state.calibration_start_time = time.monotonic()
         elif command.lower().startswith("calstop"):
+            logger.info("Received calstop.")
             self.state.calibrating= False
         elif command.startswith("F "):
             # Handle 'F' command with a single argument formatted as "x,y,d,c"

@@ -102,6 +102,7 @@ class Calibrator(Thread):
         self._p4_xy=np.zeros((2,self._max_frames))
         self._pupil_xy=np.zeros((2,self._max_frames))
         self._pupil_xy=np.zeros((2,self._max_frames))
+        logger.info(f"Created data arrays with {self._max_frames} elements.")
 
         # good measurements saved here
         self._meas = defaultdict(list)
@@ -263,28 +264,29 @@ class Calibrator(Thread):
         button_is_pressed = ed.extra.ints[8] & 0x1
         framesig_present = ed.extra.ints[0] & 0x1
 
+        # djs - The frame signals are not reliably received by the camera. The frame signal can be rather short - 
+        # half the VSG frame time, so it can be approx 4-5ms. If the camera is sampling at 500FPS, then this is OK. 
+        # If the camera is sampling at 100Hz, then the frame signals can be missed entirely. 
+
         if not self._framesig_on:
             if framesig_present:
                 self._framesig_on_at = self._counter
                 self._framesig_on = True
-                logger.info("Frame sig ON")
         else:
             # framesig_on is True, meaning the last time through the FRAME signal was present.
             # We only need to check if framesig is not present this time.
             if not framesig_present:
                 self._framesig_on = False
-                logger.info("Frame sig OFF")
 
         if self._button_up:
             if button_is_pressed:
-                logger.info("button DOWN")
                 self._button_up = False
                 if data_ok:
-                    self._button_list.append(ButtonPressInfo(self._counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
+                    self._button_list.append(ButtonPressInfo(self.counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
+                    logger.info(f"Button at {self.counter} x={ed.extra.doubles[7]}, y={ed.extra.doubles[8]}")
 
         else:
             if not button_is_pressed:
-                logger.info("button UP")
                 self._button_up = True
     
         self._counter += 1        
