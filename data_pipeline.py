@@ -4,6 +4,8 @@ from generator import EyeDataGenerator
 from shared_resources import in_cal_lock
 from open_iris_client import Point
 import time
+import logging
+logger = logging.getLogger("DataPipeline")
 
 class DataPipeline:
     #def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str='', fake_file: str='', cal_recording_path=None):
@@ -11,6 +13,7 @@ class DataPipeline:
         self.state = state
         self.generator = generator
         self.populate_extra = populate_extra
+        self.last_left_frame = 0
         # self.server_address = server_address
         # self.port = port
         # self.fake = fake        
@@ -33,6 +36,9 @@ class DataPipeline:
             if not self.state.frames_start_time:
                 self.state.frames_start_time = time.monotonic()
             self.state.frames_in += 1
+            if data.left.frame_number > self.last_left_frame+1:
+                logger.warning(f"Missed {data.left.frame_number-self.last_left_frame-1}")
+            self.last_left_frame = data.left.frame_number
 
             if self.state.calibrating:
                 # Assign values for current calibration stuff. 
