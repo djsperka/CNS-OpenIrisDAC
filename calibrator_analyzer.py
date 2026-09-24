@@ -8,7 +8,7 @@ from typing import List
 from collections import defaultdict as defaultdict
 import time
 from threading import Thread
-from queue import Queue
+from queue import Queue, Empty
 from globalstate import GlobalState
 import logging
 from enum import Enum
@@ -167,19 +167,29 @@ class Calibrator(Thread):
                 elif not self.globalstate.calibrating:
                     logger.info("CHECK done - enter IDLE")
                     self._state = self.States.IDLE
-                elif not self.globalstate.calibration_queue.empty():
-                    ed = self.globalstate.calibration_queue.get()
-                    self.step(ed)
-                    with in_cal_lock:
-                        self.globalstate.calibration_frames_out += 1
-                    if self._brecord:
-                        if not bFileIsOpen:
-                            # need to open a new file for this calibration data
-                            pathRecFile = self.globalstate.data_path / datetime.datetime.now().strftime("cal-%Y-%m-%d-%H-%M.pkl")
-                            fdRecFile = open(pathRecFile, 'wb')
-                            logger.info(f"Opened file for calibration data: {pathRecFile}")
-                            bFileIsOpen = True
-                        pickle.dump(ed, fdRecFile)
+                else:
+                    try:
+                        # fetch from the queue with a timeout. The timeout should be approx 1/capture rate. 
+                        ed=self.globalstate.calibration_queue.get(block=True, timeout=0.01)
+                        self.step(ed)
+                        with in_cal_lock:
+                            self.globalstate.calibration_frames_out += 1
+                    except Empty:
+                        continue
+                # elif not self.globalstate.calibration_queue.empty():
+                #     ed = self.globalstate.calibration_queue.get()
+                #     self.step(ed)
+                #     with in_cal_lock:
+                #         self.globalstate.calibration_frames_out += 1
+                    # if self._brecord:
+                    #     if not bFileIsOpen:
+                    #         # need to open a new file for this calibration data
+                    #         pathRecFile = self.globalstate.data_path / datetime.datetime.now().strftime("cal-%Y-%m-%d-%H-%M.pkl")
+                    #         fdRecFile = open(pathRecFile, 'wb')
+                    #         logger.info(f"Opened file for calibration data: {pathRecFile}")
+                    #         bFileIsOpen = True
+                    #     pickle.dump(ed, fdRecFile)
+                    # time.sleep(0.01)
 
                 # if state is changed, then check if file needs to be closed
                 if self._state != self.States.CHECK:
