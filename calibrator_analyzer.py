@@ -137,6 +137,9 @@ class Calibrator(Thread):
         bFileIsOpen = False
         pathRecFile = None
         fdRecFile = None
+        idle_wait = 0.1    # sleep time in idle loop
+        data_timeout = 1/self.globalstate.capture_fps
+        logger.info(f"Capture fps {self.globalstate.capture_fps}, data_timeout {data_timeout}")
 
         # loop over this cycle until we're told to stop
         while self._state != self.States.DONE:
@@ -157,7 +160,7 @@ class Calibrator(Thread):
                 elif self.globalstate.loading:
                     self._state = self.States.LOAD
                 else:
-                    time.sleep(0.1)
+                    time.sleep(idle_wait)
             elif self._state == self.States.CHECK:
                 # check for stop, and check for pause
                 # If recording of calibration data was requested (self._brecord), it is 
@@ -170,26 +173,12 @@ class Calibrator(Thread):
                 else:
                     try:
                         # fetch from the queue with a timeout. The timeout should be approx 1/capture rate. 
-                        ed=self.globalstate.calibration_queue.get(block=True, timeout=0.01)
+                        ed=self.globalstate.calibration_queue.get(block=True, timeout=data_timeout)
                         self.step(ed)
                         with in_cal_lock:
                             self.globalstate.calibration_frames_out += 1
                     except Empty:
                         continue
-                # elif not self.globalstate.calibration_queue.empty():
-                #     ed = self.globalstate.calibration_queue.get()
-                #     self.step(ed)
-                #     with in_cal_lock:
-                #         self.globalstate.calibration_frames_out += 1
-                    # if self._brecord:
-                    #     if not bFileIsOpen:
-                    #         # need to open a new file for this calibration data
-                    #         pathRecFile = self.globalstate.data_path / datetime.datetime.now().strftime("cal-%Y-%m-%d-%H-%M.pkl")
-                    #         fdRecFile = open(pathRecFile, 'wb')
-                    #         logger.info(f"Opened file for calibration data: {pathRecFile}")
-                    #         bFileIsOpen = True
-                    #     pickle.dump(ed, fdRecFile)
-                    # time.sleep(0.01)
 
                 # if state is changed, then check if file needs to be closed
                 if self._state != self.States.CHECK:
@@ -294,6 +283,8 @@ class Calibrator(Thread):
                 if data_ok:
                     self._button_list.append(ButtonPressInfo(self.counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
                     logger.info(f"Button at {self.counter} x={ed.extra.doubles[7]}, y={ed.extra.doubles[8]}")
+                else:
+                    logger.info("Button up but data not ok")
 
         else:
             if not button_is_pressed:
