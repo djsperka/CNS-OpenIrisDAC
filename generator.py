@@ -4,6 +4,7 @@ import time
 import pickle
 import math
 import logging
+from random import uniform
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +56,17 @@ class FakeOpenIrisClientGenerator(EyeDataGenerator):
 
     def generate(self):
         with OpenIrisClient(self.server_address, self.port) as client:
+            x_gain = 5
+            y_gain = 5
+            x_noise_scale = 2
+            y_noise_scale = 2
             while self.state.is_running:
                 data = client.fetch_next_data()
                 if self.state.calibrating:
                     data.left.pupil = Point(0,0)
-                    data.left.cr = Point(self.state.calibration_fixation_x * 5, self.state.calibration_fixation_y * 5)
+                    x = self.state.calibration_fixation_x * x_gain + x_noise_scale * uniform(-1, 1)
+                    y = self.state.calibration_fixation_y * y_gain + y_noise_scale * uniform(-1, 1)
+                    data.left.cr = Point(x, y)
                     data.left.p4 = Point(5, 5)
                 yield data
 
