@@ -36,8 +36,8 @@ class DataPipeline:
             if not self.state.frames_start_time:
                 self.state.frames_start_time = time.monotonic()
             self.state.frames_in += 1
-            if data.left.frame_number > self.last_left_frame+1:
-                logger.warning(f"Missed {data.left.frame_number-self.last_left_frame-1}")
+            # if data.left.frame_number > self.last_left_frame+1:
+            #     logger.warning(f"Missed {data.left.frame_number-self.last_left_frame-1}")
             self.last_left_frame = data.left.frame_number
 
             if self.state.calibrating:
