@@ -39,7 +39,7 @@ class GlobalState:
         self.pupil_output = AnalogOutputPair()
 
         self.last_eyes_data = EyesData()
-        self.is_running = True
+        self.is_running = False
 
         # for testing. When True, output taken from mouse position on main output graph
         self.is_mouse_mode = False

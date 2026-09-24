@@ -738,6 +738,7 @@ if __name__ == "__main__":
     #dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, cal_recording_path=cal_recording_path, fake_file=args.fake_file).run, args=(False,))
     dp_thread = Thread(target=DataPipeline(gs, generator).run, args=(False,))
     dp_thread.start()
+    gs.is_running = True
 
     dp_thread.join()
     if args.cal_port:
