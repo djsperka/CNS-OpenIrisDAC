@@ -262,9 +262,7 @@ class GUI:
         self.calibration_frames_in_text = sg.Text('0', size=16)
         self.calibration_frames_out_text = sg.Text('0', size=16)
         self.calibration_frames_diff_text = sg.Text('0', size=16)
-        other_column = sg.Column([[sg.Button('Fake cal', key='start-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Stop cal', key='stop-fake-cal', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Try to fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
+        other_column = sg.Column([[sg.Button('Try to fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Edit points', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Accept fit', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')],
@@ -494,14 +492,6 @@ class GUI:
                     self.update_sliders()
 
             if self.calibrator is not None:
-                # for testing only!
-                if event == 'start-fake-cal':
-                    self.state.calibrating = True
-
-                if event == 'stop-fake-cal':
-                    logger.info("stop-fake-cal")
-                    self.state.calibrating = False
-
                 if event == 'cal-edit-points':
                     b, m = self.edit_points(self.calibrator.measurements)
                     if b:
@@ -675,7 +665,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", help="File to write output to", type=str, default='')
     parser.add_argument("--fake", help="Use fake data generator instead of OpenIrisClient", action='store_true')
-    parser.add_argument("--fake-file", help="pkl file to use as fake calibration data", type=str, default='')
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     parser.add_argument("--cal-port", help="Port of calibrator server", default=9292, type=int)
@@ -739,7 +728,6 @@ if __name__ == "__main__":
     gui_thread.start()
 
     # start data pipeline
-    #dp_thread = Thread(target=DataPipeline(gs, fake=args.fake, server_address=args.address, port=args.port, cal_recording_path=cal_recording_path, fake_file=args.fake_file).run, args=(False,))
     dp_thread = Thread(target=DataPipeline(gs, generator).run, args=(False,))
     dp_thread.start()
     gs.is_running = True
