@@ -55,21 +55,25 @@ class DataPipeline:
                 with in_cal_lock:
                     self.state.calibration_frames_in += 1
 
-            # transform current signal and write to appropriate output
-            if not self.state.is_mouse_mode:
-                left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
-                left_output = self.state.left_cal.transform(left_output)
-                self.state.left_output.write(left_output)
-            else:
-                self.state.left_output.write(self.state.mouse_mode_xy)
-            
-            right_output = data.right.cr - (data.right.pupil if self.state.right_method == 'pcr' else data.right.p4)
-            right_output = self.state.right_cal.transform(right_output)
-            self.state.right_output.write(right_output)
+            # write voltage output
+            # The 'calibration_eye' value is taken from the settings file (see EyeTrackerSettings usage in gui.py).
+            # If mouse mode is active and 'Both' eyes are tracked, both outputs are written as the mouse output.
+            if self.state.calibration_eye in ("Left", "Both"):
+                if not self.state.is_mouse_mode:
+                    left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
+                    left_output = self.state.left_cal.transform(left_output)
+                    self.state.left_output.write(left_output)
+                else:
+                    self.state.left_output.write(self.state.mouse_mode_xy)
+
+            if self.state.calibration_eye in ("Right", "Both"):            
+                if not self.state.is_mouse_mode:
+                    right_output = data.right.cr - (data.right.pupil if self.state.right_method == 'pcr' else data.right.p4)
+                    right_output = self.state.right_cal.transform(right_output)
+                    self.state.right_output.write(right_output)
+                else:
+                    self.state.right_output.write(self.state.mouse_mode_xy)
 
             pupil_output = Point(data.left.pupil_area, data.right.pupil_area)
             pupil_output = self.state.pupil_cal.transform(pupil_output)
             self.state.pupil_output.write(pupil_output)
-            if debug:
-                print(data)
-                print(f'{right_output}, {pupil_output}')

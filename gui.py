@@ -322,8 +322,12 @@ class GUI:
         ly = clip(self.state.left_output.v_out.y)
         px = clip(self.state.pupil_output.v_out.x) 
         py = clip(self.state.pupil_output.v_out.y)
-        self.graph.draw_point((rx, ry), size=.15, color='firebrick1')
-        self.graph.draw_point((lx, ly), size=.15, color='DodgerBlue')
+
+        # Only draw points for tracked eye(s)
+        if self.state.calibration_eye in ("Right", "Both"):
+            self.graph.draw_point((rx, ry), size=.15, color='firebrick1')
+        if self.state.calibration_eye in ("Left", "Both"):
+            self.graph.draw_point((lx, ly), size=.15, color='DodgerBlue')
         self.graph.draw_point((px, py), size=.15, color='DarkGoldenrod1')
         
         int0 = self.state.last_eyes_data.extra.ints[0] & 1
