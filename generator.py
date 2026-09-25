@@ -42,7 +42,8 @@ class OpenIrisClientGenerator(EyeDataGenerator):
         self.port = port
 
     def generate(self):
-        with OpenIrisClient(self.server_address, self.port) as client:
+        logger.info(f"Start Open Iris client for server at {self.server_address}:{self.port}")
+        with OpenIrisClient(server_address=self.server_address, port=self.port) as client:
             while self.state.is_running:
                 data = client.fetch_next_data()
                 yield data
