@@ -27,6 +27,8 @@ class GlobalState:
         self.data_path = root_path / 'cals' / 'data'
         self.data_path.mkdir(exist_ok=True, parents=True)
 
+        logger.info(f"Root path for calibration data: {root_path}")
+
         self.left_cal = CalibrationParameters(-60,180,-.013,.013,0)
         self.left_method = 'dpi'
         self.left_output = AnalogOutputPair()
