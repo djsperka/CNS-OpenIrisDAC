@@ -239,6 +239,8 @@ class Calibrator(Thread):
 
         # I'm not sure what constitutes bad pupil data. 
         # assume that x should be in [0,720] and y in [0,450]
+        # CR data is bad if x or y is set to -100.
+        # P4 data is bad if the x value is the max (720) plus 100 (=820), or the y value is -100.
         if ed.left.pupil.x < 0 or ed.left.pupil.x > 720 or ed.left.pupil.y < 0 or ed.left.pupil.y > 450:
             self._pupil_xy[:, self._counter] = np.nan
             data_ok = False
@@ -253,23 +255,22 @@ class Calibrator(Thread):
             self._cr_xy[0, self._counter] = ed.left.cr.x
             self._cr_xy[1, self._counter] = ed.left.cr.y
 
-        # if ed.left.p4.x == 820 or ed.left.p4.y == -100:
-        #     self._p4_xy[:, self._counter] = np.nan
-        #     data_ok = False
-        # else:
-        #     self._p4_xy[0, self._counter] = ed.left.p4.x
-        #     self._p4_xy[1, self._counter] = ed.left.p4.y
-
-        self._p4_xy[0, self._counter] = ed.left.p4.x
-        self._p4_xy[1, self._counter] = ed.left.p4.y
-
+        if ed.left.p4.x == 820 or ed.left.p4.y == -100:
+            self._p4_xy[:, self._counter] = np.nan
+            data_ok = False
+        else:
+            self._p4_xy[0, self._counter] = ed.left.p4.x
+            self._p4_xy[1, self._counter] = ed.left.p4.y
 
         button_is_pressed = ed.extra.ints[8] & 0x1
         framesig_present = ed.extra.ints[0] & 0x1
 
         # djs - The frame signals are not reliably received by the camera. The frame signal can be rather short - 
         # half the VSG frame time, so it can be approx 4-5ms. If the camera is sampling at 500FPS, then this is OK. 
-        # If the camera is sampling at 100Hz, then the frame signals can be missed entirely. 
+        # If the camera is sampling at 100Hz, then the frame signals can be missed entirely.
+        # This means that we (for now) will take the messages received by the CalibratorComm as true: when assume that 
+        # when a msg is received (e.g. F 0,0,1,red), then the fixpt is at that point. 
+        # The code here that checks for the frame signal is ignored. 
 
         if not self._framesig_on:
             if framesig_present:
@@ -281,14 +282,20 @@ class Calibrator(Thread):
             if not framesig_present:
                 self._framesig_on = False
 
+        # button_is_pressed is set according to the dio bits read in the dio thread, and which are assigned to 
+        # extra.Ints[0]. The _button_up var maintains the button state across frames. Below we look for the 
+        # frame where the button press is first detected. If that is the case, save the button press in the 
+        # button list. 
+        #
+        # Originally, the button info was saved ONLY IF the current data was OK - i.e. pupil, CR, and P4 data were
+        # all good. This is probably too restrictive, saving the button info regardless. The button check will filter
+        # out bad data.
+
         if self._button_up:
             if button_is_pressed:
                 self._button_up = False
-                if data_ok:
-                    self._button_list.append(ButtonPressInfo(self.counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
-                    logger.info(f"Button at {self.counter} x={ed.extra.doubles[7]}, y={ed.extra.doubles[8]}")
-                else:
-                    logger.info("Button up but data not ok")
+                self._button_list.append(ButtonPressInfo(self.counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
+                logger.info(f"Button at {self.counter} x={ed.extra.doubles[7]}, y={ed.extra.doubles[8]}")
 
         else:
             if not button_is_pressed:
