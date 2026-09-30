@@ -253,12 +253,16 @@ class Calibrator(Thread):
             self._cr_xy[0, self._counter] = ed.left.cr.x
             self._cr_xy[1, self._counter] = ed.left.cr.y
 
-        if ed.left.p4.x == 820 or ed.left.p4.y == -100:
-            self._p4_xy[:, self._counter] = np.nan
-            data_ok = False
-        else:
-            self._p4_xy[0, self._counter] = ed.left.p4.x
-            self._p4_xy[1, self._counter] = ed.left.p4.y
+        # if ed.left.p4.x == 820 or ed.left.p4.y == -100:
+        #     self._p4_xy[:, self._counter] = np.nan
+        #     data_ok = False
+        # else:
+        #     self._p4_xy[0, self._counter] = ed.left.p4.x
+        #     self._p4_xy[1, self._counter] = ed.left.p4.y
+
+        self._p4_xy[0, self._counter] = ed.left.p4.x
+        self._p4_xy[1, self._counter] = ed.left.p4.y
+
 
         button_is_pressed = ed.extra.ints[8] & 0x1
         framesig_present = ed.extra.ints[0] & 0x1
