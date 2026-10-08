@@ -734,5 +734,5 @@ if __name__ == "__main__":
         dio_stop_event.set()
         dio_thread.join()
     gui_thread.join()
-    gs.save()
+    gs.save_config()
     

@@ -1,0 +1,96 @@
+[left.CR]
+
+x_bias = -55.0
+
+y_bias = 180.0
+
+x_gain = -0.013
+
+y_gain = 0.013
+
+rotation = 0
+
+
+
+[left.DPI]
+
+x_bias = -60.0
+
+y_bias = 180.0
+
+x_gain = -0.013
+
+y_gain = 0.013
+
+rotation = 0
+
+
+
+[left.PUPIL]
+
+x_bias = 0.0
+
+y_bias = 0.0
+
+x_gain = 3.0e-5
+
+y_gain = 3.0e-5
+
+rotation = 0.0
+
+
+[right.CR]
+
+x_bias = -60.0
+
+y_bias = 180.0
+
+x_gain = -0.013
+
+y_gain = 0.013
+
+rotation = 0.0
+
+
+
+[right.DPI]
+
+x_bias = -60.0
+
+y_bias = 180.0
+
+x_gain = -0.013
+
+y_gain = 0.013
+
+rotation = 0.0
+
+
+
+[right.PUPIL]
+
+x_bias = 0.0
+
+y_bias = 0.0
+
+x_gain = 3.0e-5
+
+y_gain = 3.0e-5
+
+rotation = 0.0
+
+
+[calibration]
+
+vpdx = 0.4
+
+vpdy = 0.4
+
+before_sec = 0.1
+
+after_sec = 0.1
+
+vmax_px_per_sec = 5000
+
+eye = 'Left'
+

@@ -57,6 +57,13 @@ class CalibrationParameters:
             print(e)
             print('Error loading calibration file.')
 
+    @classmethod
+    def from_dict(cls, d):
+        return cls(d['x_bias'], d['y_bias'], d['x_gain'], d['y_gain'], d['rotation'])
+
+    def to_dict(self):
+        return {'x_bias': self.x_bias, 'y_bias': self.y_bias, 'x_gain': self.x_gain, 'y_gain': self.y_gain, 'rotation': self.rotation}
+    
 class AnalogOutput:
     def __init__(self, module:AnalogModule = None, channel:int=0):
         if module is None:
