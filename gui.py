@@ -668,17 +668,10 @@ if __name__ == "__main__":
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     parser.add_argument("--cal-port", help="Port of calibrator server", default=9292, type=int)
-    parser.add_argument("--no-cal-record", help="DO NOT record data (incl button&FRAME) during calibration", action='store_false')
     parser.add_argument("--fps", help="Capture rate, in frames per second, of eye tracker.", type=int, default=0)
     parser.add_argument("--eye", help="Eye to calibrate from. If single camera, configure it correctly. If dual, then this must be specified.", type=str, default='')
     parser.add_argument("--tracker-folder", help="Folder with the EyeTrackerSettings.xml file", type=str, default='')
     args = parser.parse_args()
-    if not args.no_cal_record:
-        cal_recording_path = PlatformDirs("CNS-OpenIrisDAC", appauthor=False).user_data_path
-        # make sure it exists
-        cal_recording_path.mkdir(exist_ok=True)
-    else:
-        cal_recording_path = None
 
     if not args.fake:
         kwargs = {'server_address': args.address, 'port': args.port}
@@ -717,8 +710,7 @@ if __name__ == "__main__":
     if args.cal_port:
         calibrator_comm_thread = CalibratorComm(gs, port=args.cal_port)
         calibrator_comm_thread.start()
-        calibrator_ana_thread = Calibrator(gs, brecord=not args.no_cal_record)
-        # gs.calibrator = calibrator_ana_thread
+        calibrator_ana_thread = Calibrator(gs)
         calibrator_ana_thread.start()
         dio_stop_event = Event()
         dio_thread = DIOThread(dio_stop_event, gs)

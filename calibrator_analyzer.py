@@ -77,10 +77,9 @@ class Calibrator(Thread):
         IDLE=5
         DONE=99
 
-    def __init__(self, gs:GlobalState, brecord:bool):
+    def __init__(self, gs:GlobalState):
         super().__init__()
         self.globalstate = gs
-        self._brecord = brecord
         self._stopnow = False
 
         # initialize first, skip state INITIALIZE
@@ -163,8 +162,6 @@ class Calibrator(Thread):
                     time.sleep(idle_wait)
             elif self._state == self.States.CHECK:
                 # check for stop, and check for pause
-                # If recording of calibration data was requested (self._brecord), it is 
-                # dealt with in this state. The file is opened and closed here as needed.
                 if self._stopnow:
                     self._state = self.States.DONE
                 elif not self.globalstate.calibrating:
