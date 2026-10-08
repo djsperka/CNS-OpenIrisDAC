@@ -24,8 +24,6 @@ class GlobalState:
             root_path = PlatformDirs("CNS-OpenIrisDAC", appauthor=False).user_config_path
         self.save_path = root_path / 'cals' / '.state'
         self.save_path.mkdir(exist_ok=True, parents=True)
-        self.data_path = root_path / 'cals' / 'data'
-        self.data_path.mkdir(exist_ok=True, parents=True)
 
         logger.info(f"Root path for calibration data: {root_path}")
 

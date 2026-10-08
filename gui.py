@@ -266,7 +266,7 @@ class GUI:
                                   [sg.Button('Edit points', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Accept fit', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Load', key='cal-load', enable_events=True, button_color='PaleVioletRed4')],
+#                                  [sg.Button('Load', key='cal-load', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.VPush()], [sg.Text('All frames in: '), self.all_frames_in_text, sg.Text('Cal frames in: '), self.calibration_frames_in_text], [sg.Text('Cal frames out: '), self.calibration_frames_out_text], [sg.Text('Diff: '), self.calibration_frames_diff_text]])
         calibration_layout = [[graph_column,other_column]]        
         ct = sg.Tab('Calibration', calibration_layout)
@@ -517,11 +517,11 @@ class GUI:
                     else:
                         logger.error(f"Calibrator does not have a valid calibration.")
 
-                if event == 'cal-load':
-                    file_to_load = sg.popup_get_file('Select a cal-xy file to load', initial_folder=str(self.state.data_path), file_types=(('xy files', '.xy'),), no_window=True)
-                    # Build a list of tuples for each file type the file dialog should display
-                    if file_to_load:
-                        self.calibrator.load_measurements(file_to_load)
+                # if event == 'cal-load':
+                #     file_to_load = sg.popup_get_file('Select a cal-xy file to load', initial_folder=str(self.state.data_path), file_types=(('xy files', '.xy'),), no_window=True)
+                #     # Build a list of tuples for each file type the file dialog should display
+                #     if file_to_load:
+                #         self.calibrator.load_measurements(file_to_load)
 
                 # update calibration graphs
                 if event == 'calibration-graphs':
