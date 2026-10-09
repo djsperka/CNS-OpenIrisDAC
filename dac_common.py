@@ -2,6 +2,7 @@ import numpy as np
 from open_iris_client import Point
 from dataclasses import dataclass
 from pathlib import Path
+import tomlkit
 import math
 
 class AnalogModule:
@@ -63,6 +64,16 @@ class CalibrationParameters:
 
     def to_dict(self):
         return {'x_bias': self.x_bias, 'y_bias': self.y_bias, 'x_gain': self.x_gain, 'y_gain': self.y_gain, 'rotation': self.rotation}
+
+    def to_table(self):
+        table = tomlkit.table()
+        table.add('x_bias', self.x_bias)
+        table.add('y_bias', self.y_bias)
+        table.add('x_gain', self.x_gain)
+        table.add('y_gain', self.y_gain)
+        table.add('rotation', self.rotation)
+        return table
+
     
 class AnalogOutput:
     def __init__(self, module:AnalogModule = None, channel:int=0):

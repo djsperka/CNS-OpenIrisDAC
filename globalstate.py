@@ -77,26 +77,30 @@ class GlobalState:
         return self.root_path / self.current / 'config.toml'
 
     def maybe_create_config(self):
-        if not self.root_path.exists():
-            logger.info(f"Config folder {str(self.root_path)} does not exist. Creating...")
-            self.root_path.mkdir(parents=True)
+        save_path = self.root_path / self.current
+        if not save_path.exists():
+            logger.info(f"Config folder {str(save_path)} does not exist. Creating...")
+            save_path.mkdir(parents=True)
             logger.info("Config path created.")
 
         if not self.config_file.exists():
             logger.info(f"Config file {str(self.config_file)} does not exist, creating a new one")
-            cfg = {}
-            cfg['calibration']['before_sec'] = 0.1
-            cfg['calibration']['after_sec'] =  0.1
-            cfg['calibration']['vmax_px_per_sec'] = 5000
-            cfg['calibration']['vpdx'] = 0.4
-            cfg['calibration']['vpdy'] = 0.4
-            cfg['calibration']['eye'] = 'Left'
-            cfg['left']['CR'] = CalibrationParameters(-60,180,-.013,.013,0).to_dict()
-            cfg['left']['DPI'] = CalibrationParameters(-60,180,-.013,.013,0).to_dict()
-            cfg['left']['PUPIL'] = CalibrationParameters(0,0,3.0e-5,3.0e-5,0).to_dict()
-            cfg['right']['CR'] = CalibrationParameters(80,180,-.013,.013,0).to_dict()
-            cfg['right']['DPI'] = CalibrationParameters(80,180,-.013,.013,0).to_dict()
-            cfg['right']['PUPIL'] = CalibrationParameters(0,0,3.0e-5,3.0e-5,0).to_dict()
+            cfg = tomlkit.document()
+            calibration = tomlkit.table()
+            calibration.add('before_sec', 0.1)
+            calibration.add('after_sec', 0.1)
+            calibration.add('vmax_px_per_sec', 5000)
+            calibration.add('vpdx', 0.4)
+            calibration.add('vpdy', 0.4)
+            calibration.add('eye', 'Left')
+            cfg.add('calibration', calibration)
+            cfg.add('left.CR', CalibrationParameters(-60,180,-.013,.013,0).to_table())
+            cfg.add('left.DPI', CalibrationParameters(-60,180,-.013,.013,0).to_table())
+            cfg.add('left.PUPIL', CalibrationParameters(0,0,3.0e-5,3.0e-5,0).to_table())
+            cfg.add('right.CR', CalibrationParameters(-60,180,-.013,.013,0).to_table())
+            cfg.add('right.DPI', CalibrationParameters(-60,180,-.013,.013,0).to_table())
+            cfg.add('right.PUPIL', CalibrationParameters(0,0,3.0e-5,3.0e-5,0).to_table())
+
             with self.config_file.open(mode='w') as fp:
                 tomlkit.dump(cfg, fp)
             logger.info("Config file created")
