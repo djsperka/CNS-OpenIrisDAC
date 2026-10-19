@@ -20,12 +20,13 @@ else:
 
 
 class GlobalState:
-    def __init__(self, root_path:Path|None = None, current:str = 'default') -> None:
+    def __init__(self, root_path:Path|None = None, subject:str = 'default', basename:str = 'config') -> None:
         if root_path is None:
             self.root_path = Path.home() / '.dpidac'
         else:
             self.root_path = root_path
-        self.current = current
+        self.subject = subject
+        self.basename = basename
         logger.info(f"Config file: {self.config_file}")
 
         # assign non-config stuff first. 
@@ -66,6 +67,20 @@ class GlobalState:
         self.calibration_increase_step_sec:int = 300
         self.calibration_queue:Queue=Queue()
 
+        # These are parameters from the config file. Create default/dummy values here, will be overwritten
+        # by loaded config file. If no config file exists, these values will be written to a new config file.
+        self.left_cal = CalibrationParameters(-60,180,-.013,.013,0)
+        self.left_dpi = CalibrationParameters(-60,180,-.013,.013,0)
+        self.pupil_cal = CalibrationParameters(0,0,3.0e-5,3.0e-5,0)
+        self.right_cal = CalibrationParameters(-60,180,-.013,.013,0)
+        self.right_dpi = CalibrationParameters(-60,180,-.013,.013,0)        
+        self.calibration_before_sec = 0.1
+        self.calibration_after_sec = 0.1
+        self.calibration_vmax_px_per_sec = 5000
+        self.calibration_vpdx = 0.4
+        self.calibration_vpdy = 0.4
+        self.calibration_eye = 'Left'
+
         # load calibration 
         self.load_config()
 
@@ -74,10 +89,14 @@ class GlobalState:
 
     @property
     def config_file(self):
-        return self.root_path / self.current / 'config.toml'
+        return self.root_path / self.subject / f"{self.basename}.toml"
 
     def maybe_create_config(self):
-        save_path = self.root_path / self.current
+        """Check if config file (expected to be at root_path/current/subject.toml)
+        exists. If not, create it (and folder if it doesn't exist). 
+        If it does exist, do nothing and return.
+        """
+        save_path = self.root_path / self.subject
         if not save_path.exists():
             logger.info(f"Config folder {str(save_path)} does not exist. Creating...")
             save_path.mkdir(parents=True)
@@ -85,24 +104,7 @@ class GlobalState:
 
         if not self.config_file.exists():
             logger.info(f"Config file {str(self.config_file)} does not exist, creating a new one")
-            cfg = tomlkit.document()
-            calibration = tomlkit.table()
-            calibration.add('before_sec', 0.1)
-            calibration.add('after_sec', 0.1)
-            calibration.add('vmax_px_per_sec', 5000)
-            calibration.add('vpdx', 0.4)
-            calibration.add('vpdy', 0.4)
-            calibration.add('eye', 'Left')
-            cfg.add('calibration', calibration)
-            cfg.add('left.CR', CalibrationParameters(-60,180,-.013,.013,0).to_table())
-            cfg.add('left.DPI', CalibrationParameters(-60,180,-.013,.013,0).to_table())
-            cfg.add('left.PUPIL', CalibrationParameters(0,0,3.0e-5,3.0e-5,0).to_table())
-            cfg.add('right.CR', CalibrationParameters(-60,180,-.013,.013,0).to_table())
-            cfg.add('right.DPI', CalibrationParameters(-60,180,-.013,.013,0).to_table())
-            cfg.add('right.PUPIL', CalibrationParameters(0,0,3.0e-5,3.0e-5,0).to_table())
-
-            with self.config_file.open(mode='w') as fp:
-                tomlkit.dump(cfg, fp)
+            self.save_config()
             logger.info("Config file created")
 
     def load_config(self):
@@ -114,12 +116,11 @@ class GlobalState:
         logger.info(f"Loading config file {str(self.config_file)}")
         with self.config_file.open(mode='r') as fp:
             cfg = tomlkit.load(fp)
-        self.left_cal = CalibrationParameters.from_dict(cfg['left']['CR'])
-        self.left_dpi = CalibrationParameters.from_dict(cfg['left']['DPI'])
-        self.left_pupil_cal = CalibrationParameters.from_dict(cfg['left']['PUPIL'])
-        self.right_cal = CalibrationParameters.from_dict(cfg['right']['CR'])
-        self.right_dpi = CalibrationParameters.from_dict(cfg['right']['DPI'])        
-        self.right_pupil_cal = CalibrationParameters.from_dict(cfg['right']['PUPIL'])
+        self.left_cal = CalibrationParameters.from_dict(cfg['left.CR'])
+        self.left_dpi = CalibrationParameters.from_dict(cfg['left.DPI'])
+        self.pupil_cal = CalibrationParameters.from_dict(cfg['both.PUPIL'])
+        self.right_cal = CalibrationParameters.from_dict(cfg['right.CR'])
+        self.right_dpi = CalibrationParameters.from_dict(cfg['right.DPI'])        
         self.calibration_before_sec = cfg['calibration']['before_sec']
         self.calibration_after_sec = cfg['calibration']['after_sec']
         self.calibration_vmax_px_per_sec = cfg['calibration']['vmax_px_per_sec']
@@ -131,20 +132,22 @@ class GlobalState:
 
         logger.info(f"Save config file {str(self.config_file)}")
 
-        # build the cfg dict
-        cfg = {}
-        cfg['calibration']['before_sec'] = self.calibration_before_sec
-        cfg['calibration']['after_sec'] =  self.calibration_after_sec
-        cfg['calibration']['vmax_px_per_sec'] = self.calibration_vmax_px_per_sec
-        cfg['calibration']['vpdx'] = self.calibration_vpdx
-        cfg['calibration']['vpdy'] = self.calibration_vpdy
-        cfg['calibration']['eye'] = self.calibration_eye
-        cfg['left']['CR'] = self.left_cal.to_dict()
-        cfg['left']['DPI'] = self.left_dpi.to_dict()
-        cfg['left']['PUPIL'] = self.left_pupil_cal.to_dict()
-        cfg['right']['CR'] = self.right_cal.to_dict()
-        cfg['right']['DPI'] = self.right_dpi.to_dict()
-        cfg['right']['PUPIL'] = self.right_pupil_cal.to_dict()
+        # build the cfg object
+        cfg = tomlkit.document()
+        calibration = tomlkit.table()
+        calibration.add('before_sec', self.calibration_before_sec)
+        calibration.add('after_sec', self.calibration_after_sec)
+        calibration.add('vmax_px_per_sec', self.calibration_vmax_px_per_sec)
+        calibration.add('vpdx', self.calibration_vpdx)
+        calibration.add('vpdy', self.calibration_vpdy)
+        calibration.add('eye', self.calibration_eye)
+        cfg.add('calibration', calibration)
+        cfg.add('left.CR', self.left_cal.to_table())
+        cfg.add('left.DPI', self.left_dpi.to_table())
+        cfg.add('both.PUPIL', self.pupil_cal.to_table())
+        cfg.add('right.CR', self.right_cal.to_table())
+        cfg.add('right.DPI', self.right_dpi.to_table())
+
         with self.config_file.open(mode='w') as fp:
             tomlkit.dump(cfg, fp)
         logger.info(f"Config file {str(self.config_file)} saved.")
@@ -170,42 +173,21 @@ class GlobalState:
 
         logger.info(f"Found {len(self.output_dict)} Output Channels: {self.output_dict.keys()}")
 
-    # def save(self, path:Path|None = None):
-    #     if path is None:
-    #         path = self.save_path
 
-    #     if not path.exists():
-    #         path.mkdir()
-    #     # save calibrations
-    #     self.left_cal.save(path / 'left_cal.txt')
-    #     self.right_cal.save(path / 'right_cal.txt')
-    #     self.pupil_cal.save(path / 'pupil_cal.txt')
-    #     # save methods
-    #     with open(path / 'methods.txt', 'w') as f:
-    #         f.write(f'{self.left_method},{self.right_method}')
-    
-    # def load(self, path:Path|None = None):
-    #     if path is None:
-    #         path = self.save_path
+if __name__ == "__main__":
+    import argparse
 
-    #     if not path.exists():
-    #         logger.error(f'Folder for saving state {self.save_path} was not found.')
-    #         return
-    #     # load calibrations
-    #     try:
-    #         self.left_cal.load(path / 'left_cal.txt')
-    #         self.right_cal.load(path / 'right_cal.txt')
-    #         self.pupil_cal.load(path / 'pupil_cal.txt')
-    #     except:
-    #         logger.error('Error loading calibration files.')
-    #     # load methods
-    #     try:
-    #         with open(path / 'methods.txt', 'r') as f:
-    #             self.left_method, self.right_method = f.read().split(',')
-    #         if self.left_method not in ['dpi', 'pcr']:
-    #             self.left_method = 'dpi'
-    #         if self.right_method not in ['dpi', 'pcr']:
-    #             self.right_method = 'dpi'
-    #     except:
-    #         self.left_method = 'dpi'
-    #         self.right_method = 'dpi'
+    logging.basicConfig(level=logging.INFO)
+
+    # Single input argument (optional) is filename to write output to.
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--subject", help="Current subject/config to use.", type=str, default='')
+    parser.add_argument("--root-path", help="Base config folder", type=str, default='')
+    args = parser.parse_args()
+
+    if args.root_path:
+        root_path = Path(args.root_path)
+    else:
+        root_path = None
+
+    gs = GlobalState(root_path=root_path, subject=args.subject)

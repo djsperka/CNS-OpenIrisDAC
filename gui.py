@@ -132,7 +132,6 @@ class GUI:
 
         # DJS - changing gain, bias factor to 1
         self.bias_factor = 1
-
         self.gain_factor = 1
         b_min = -100
         b_max = 100
@@ -144,8 +143,8 @@ class GUI:
 
 
         # move pupil tab first
-        self.pupil_bias_factor = 3e3
-        self.pupil_gain_factor = 3e-7
+        self.pupil_bias_factor = 1
+        self.pupil_gain_factor = 1
         self.plb = GUIField(
             'LPupil Bias', 'left_pupil_bias', field_size, 
             self.state.pupil_cal, 'x_bias', gain_factor=self.pupil_bias_factor, 
@@ -671,6 +670,7 @@ if __name__ == "__main__":
     parser.add_argument("--fps", help="Capture rate, in frames per second, of eye tracker.", type=int, default=0)
     parser.add_argument("--eye", help="Eye to calibrate from. If single camera, configure it correctly. If dual, then this must be specified.", type=str, default='')
     parser.add_argument("--tracker-folder", help="Folder with the EyeTrackerSettings.xml file", type=str, default='')
+    parser.add_argument("--subject", help="Current subject (part of path to config file)", type=str, default='')
     args = parser.parse_args()
 
     if not args.fake:
@@ -679,7 +679,7 @@ if __name__ == "__main__":
         logger.warning('Using fake data generator')
         kwargs = {}
 
-    gs = GlobalState()
+    gs = GlobalState(subject=args.subject)
 
     # get fps and eye if not on command line
     ets = EyeTrackerSettings(tracker_folder=args.tracker_folder)
