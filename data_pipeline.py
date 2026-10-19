@@ -8,28 +8,13 @@ import logging
 logger = logging.getLogger("DataPipeline")
 
 class DataPipeline:
-    #def __init__(self, state:GlobalState, fake: bool=False, server_address: str='localhost', port: int=9003, output: str='', fake_file: str='', cal_recording_path=None):
     def __init__(self, state:GlobalState, generator:EyeDataGenerator, populate_extra:bool = True):
         self.state = state
         self.generator = generator
         self.populate_extra = populate_extra
         self.last_left_frame = 0
-        # self.server_address = server_address
-        # self.port = port
-        # self.fake = fake        
-        # self.output = output
-        # self.output_file = None
-        # self.fake_file = fake_file
-        # self.cal_recording_path = cal_recording_path
-        # self.cal_recording_fd = None
 
     def run(self, debug=False):
-
-        # # create generator
-        # if self.fake:
-        #     generator = FakeEyeDataGenerator(self.state, self.fake_file)
-        # else:  
-        #     generator = OpenIrisClientGenerator(self.state, self.server_address, self.port)
 
         for data in self.generator.generate():    
             self.state.last_eyes_data = data
