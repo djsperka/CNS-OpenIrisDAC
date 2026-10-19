@@ -673,6 +673,12 @@ if __name__ == "__main__":
     parser.add_argument("--subject", help="Current subject (part of path to config file)", type=str, default='')
     args = parser.parse_args()
 
+    # if no subject was specified, open selection dialog
+    if not args.subject:
+        subject = GlobalState.select_subject()    
+        print(f"Selected subject {subject}")
+
+
     if not args.fake:
         kwargs = {'server_address': args.address, 'port': args.port}
     else:

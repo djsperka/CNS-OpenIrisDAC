@@ -20,11 +20,22 @@ else:
 
 
 class GlobalState:
-    def __init__(self, root_path:Path|None = None, subject:str = 'default', basename:str = 'config') -> None:
-        if root_path is None:
-            self.root_path = Path.home() / '.dpidac'
-        else:
-            self.root_path = root_path
+    root_path = Path.home() / '.dpidac'
+
+    @classmethod
+    def select_subject(cls):
+        import PySimpleGUI as sg
+        values = ['choice {}'.format(x) for x in range(30)]
+        window = sg.Window('Select subject',
+            [[sg.Text('Select subject')],
+            [sg.DropDown(values, key='-DROP-')],
+            [sg.OK(), sg.Cancel()]
+        ])
+        event, values = window.read()
+        window.close()
+        return None if event != 'OK' else values['-DROP-']
+
+    def __init__(self, subject:str = 'default', basename:str = 'config') -> None:
         self.subject = subject
         self.basename = basename
         logger.info(f"Config file: {self.config_file}")
@@ -89,14 +100,14 @@ class GlobalState:
 
     @property
     def config_file(self):
-        return self.root_path / self.subject / f"{self.basename}.toml"
+        return GlobalState.root_path / self.subject / f"{self.basename}.toml"
 
     def maybe_create_config(self):
         """Check if config file (expected to be at root_path/current/subject.toml)
         exists. If not, create it (and folder if it doesn't exist). 
         If it does exist, do nothing and return.
         """
-        save_path = self.root_path / self.subject
+        save_path = GlobalState.root_path / self.subject
         if not save_path.exists():
             logger.info(f"Config folder {str(save_path)} does not exist. Creating...")
             save_path.mkdir(parents=True)
@@ -185,9 +196,4 @@ if __name__ == "__main__":
     parser.add_argument("--root-path", help="Base config folder", type=str, default='')
     args = parser.parse_args()
 
-    if args.root_path:
-        root_path = Path(args.root_path)
-    else:
-        root_path = None
-
-    gs = GlobalState(root_path=root_path, subject=args.subject)
+    gs = GlobalState(subject=args.subject)
