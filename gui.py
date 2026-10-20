@@ -277,6 +277,17 @@ class GUI:
             [tabs]
         ]
 
+    # def select_subject(self):
+    #     values = ['choice {}'.format(x) for x in range(30)]
+    #     window = sg.Window('Select subject',
+    #         [[sg.Text('Select subject')],
+    #         [sg.DropDown(values, key='-DROP-')],
+    #         [sg.OK(), sg.Cancel()]
+    #     ])
+    #     event, values = window.read()
+    #     window.close()
+    #     return None if event != 'OK' else values['-DROP-']
+
     def update_sliders(self):
         self.lbx.sync_state(self.window)
         self.lby.sync_state(self.window)
@@ -386,7 +397,12 @@ class GUI:
         
 
     def window_loop(self, verbose=False):
-        
+
+        # Allow user to select a configuration
+        # TODO: Remember configuration used last time this program ran.
+        tmp = GlobalState.select_subject()
+        logger.info(f"Got subject {tmp}")
+
         self.window = sg.Window('OpenIrisClient', self.layout, finalize=True)
         self.graph.bind('<Motion>', '-mouse-motion')
         #TEMP MOVE UPDATE TO REGULAR TIMEOUT self.window.timer_start(500, key='calibration-graphs', repeating=True)
@@ -673,10 +689,10 @@ if __name__ == "__main__":
     parser.add_argument("--subject", help="Current subject (part of path to config file)", type=str, default='')
     args = parser.parse_args()
 
-    # if no subject was specified, open selection dialog
-    if not args.subject:
-        subject = GlobalState.select_subject()    
-        print(f"Selected subject {subject}")
+    # # if no subject was specified, open selection dialog
+    # if not args.subject:
+    #     subject = GlobalState.select_subject()    
+    #     print(f"Selected subject {subject}")
 
 
     if not args.fake:
@@ -685,7 +701,7 @@ if __name__ == "__main__":
         logger.warning('Using fake data generator')
         kwargs = {}
 
-    gs = GlobalState(subject=args.subject)
+    gs = GlobalState()
 
     # get fps and eye if not on command line
     ets = EyeTrackerSettings(tracker_folder=args.tracker_folder)

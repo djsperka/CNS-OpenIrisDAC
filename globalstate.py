@@ -20,24 +20,20 @@ else:
 
 
 class GlobalState:
-    root_path = Path.home() / '.dpidac'
 
-    @classmethod
-    def select_subject(cls):
-        import PySimpleGUI as sg
-        values = ['choice {}'.format(x) for x in range(30)]
-        window = sg.Window('Select subject',
-            [[sg.Text('Select subject')],
-            [sg.DropDown(values, key='-DROP-')],
-            [sg.OK(), sg.Cancel()]
-        ])
-        event, values = window.read()
-        window.close()
-        return None if event != 'OK' else values['-DROP-']
+    root_path = Path.home() / '.dpidac'     # configuration folders/files ALWAYS located in this folder. 
+    default_subject = 'default'
+    default_basename = 'config'
 
     def __init__(self, subject:str = 'default', basename:str = 'config') -> None:
+        if not subject:
+            subject = self.default_subject
+        if not basename:
+            basename = self.default_basename
+
         self.subject = subject
         self.basename = basename
+
         logger.info(f"Config file: {self.config_file}")
 
         # assign non-config stuff first. 
@@ -102,8 +98,29 @@ class GlobalState:
     def config_file(self):
         return GlobalState.root_path / self.subject / f"{self.basename}.toml"
 
+    @classmethod
+    def select_subject(cls):
+        import PySimpleGUI as sg
+        subjects = next(os.walk(str(cls.root_path)))[1]
+        window = sg.Window('Select subject',
+            [[sg.Text('Select subject')],
+            [sg.Listbox(subjects, key='-SUBJECTS-', select_mode=sg.LISTBOX_SELECT_MODE_SINGLE, size=(15,5), enable_events=True)],
+            [sg.OK(), sg.Cancel()]
+        ])
+
+        while True:
+            event, values = window.read(timeout=100) # 20ms = 50Hz
+            if event != '__TIMEOUT__':
+                print(event, values)
+            # handle exit
+            if event == sg.WIN_CLOSED or event == 'Close' or event == 'Exit':
+                break
+
+        window.close()
+        return None if event != 'OK' else values['-SUBJECTS-']
+
     def maybe_create_config(self):
-        """Check if config file (expected to be at root_path/current/subject.toml)
+        """Check if config file (expected to be at root_path/subject/basename.toml)
         exists. If not, create it (and folder if it doesn't exist). 
         If it does exist, do nothing and return.
         """
@@ -111,14 +128,26 @@ class GlobalState:
         if not save_path.exists():
             logger.info(f"Config folder {str(save_path)} does not exist. Creating...")
             save_path.mkdir(parents=True)
-            logger.info("Config path created.")
 
         if not self.config_file.exists():
             logger.info(f"Config file {str(self.config_file)} does not exist, creating a new one")
             self.save_config()
-            logger.info("Config file created")
 
-    def load_config(self):
+    def load_config(self, subject:str = '', basename: str = ''):
+        """Load configuration file and update state variables. If subject or basename is provided, use those to find config file. If file or folder does not yet exist, create it/them.
+
+        Args:
+            subject (str, optional): Subject folder to load from. Defaults to '' - current subject will be used.
+            basename (str, optional): Config file basename. Defaults to '' - current basename will be used.
+        """
+
+        # if args not passed, load using current values
+        if subject:
+            print(f"subject {subject}")
+            self.subject = subject
+        if basename:
+            print(f"basename {basename}")
+            self.basename = basename
 
         # check if config path and file exist. If not, create them.
         self.maybe_create_config()
@@ -140,8 +169,6 @@ class GlobalState:
         self.calibration_eye = cfg['calibration']['eye']
 
     def save_config(self):
-
-        logger.info(f"Save config file {str(self.config_file)}")
 
         # build the cfg object
         cfg = tomlkit.document()
@@ -193,7 +220,8 @@ if __name__ == "__main__":
     # Single input argument (optional) is filename to write output to.
     parser = argparse.ArgumentParser()
     parser.add_argument("--subject", help="Current subject/config to use.", type=str, default='')
-    parser.add_argument("--root-path", help="Base config folder", type=str, default='')
+    parser.add_argument("--basename", help="Basename for config file (no dot or extension)", type=str, default='')
     args = parser.parse_args()
 
-    gs = GlobalState(subject=args.subject)
+    gs = GlobalState(subject=args.subject, basename=args.basename)
+    gs.save_config()
