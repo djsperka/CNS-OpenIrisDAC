@@ -104,20 +104,20 @@ class GlobalState:
         subjects = next(os.walk(str(cls.root_path)))[1]
         window = sg.Window('Select subject',
             [[sg.Text('Select subject')],
-            [sg.Listbox(subjects, key='-SUBJECTS-', select_mode=sg.LISTBOX_SELECT_MODE_SINGLE, size=(15,5), enable_events=True)],
+            [sg.Listbox(subjects, key='-SUBJECTS-', select_mode=sg.LISTBOX_SELECT_MODE_SINGLE, size=(15,5), enable_events=True, default_values=['default']),],
             [sg.OK(), sg.Cancel()]
         ])
 
         while True:
             event, values = window.read(timeout=100) # 20ms = 50Hz
-            if event != '__TIMEOUT__':
-                print(event, values)
+            # if event != '__TIMEOUT__':
+            #     print(event, values)
             # handle exit
-            if event == sg.WIN_CLOSED or event == 'Close' or event == 'Exit':
+            if event == sg.WIN_CLOSED or event == 'OK' or event == 'Cancel':
                 break
 
         window.close()
-        return None if event != 'OK' else values['-SUBJECTS-']
+        return None if event != 'OK' else values['-SUBJECTS-'][0]
 
     def maybe_create_config(self):
         """Check if config file (expected to be at root_path/subject/basename.toml)
