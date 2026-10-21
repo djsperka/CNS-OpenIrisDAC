@@ -7,6 +7,7 @@ from queue import Queue
 #from platformdirs import PlatformDirs
 import logging
 import tomlkit
+from tomlkit.exceptions import NonExistentKey
 logger = logging.getLogger("GlobalState")
 
 DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac')
@@ -87,6 +88,9 @@ class GlobalState:
         self.calibration_vpdx = 0.4
         self.calibration_vpdy = 0.4
         self.calibration_eye = 'Left'
+        self.left_x_channel = 'USB-AO16-8E-ch0'
+        self.left_y_channel = 'USB-AO16-8E-ch1'
+        self.pupil_x_channel = 'USB-AO16-8E-ch5'
 
         # load calibration 
         self.load_config()
@@ -168,6 +172,13 @@ class GlobalState:
         self.calibration_vpdy = cfg['calibration']['vpdy']
         self.calibration_eye = cfg['calibration']['eye']
 
+        try:
+            self.left_x_channel = cfg['output']['left_x_channel']
+            self.left_y_channel = cfg['output']['left_y_channel']
+            self.pupil_x_channel = cfg['output']['pupil_x_channel']
+        except NonExistentKey:
+            pass
+
     def save_config(self):
 
         # build the cfg object
@@ -185,6 +196,11 @@ class GlobalState:
         cfg.add('both.PUPIL', self.pupil_cal.to_table())
         cfg.add('right.CR', self.right_cal.to_table())
         cfg.add('right.DPI', self.right_dpi.to_table())
+        output = tomlkit.table()
+        output.add('left_x_channel', self.left_x_channel)
+        output.add('left_y_channel', self.left_y_channel)
+        output.add('pupil_x_channel', self.pupil_x_channel)
+        cfg.add('output', output)
 
         with self.config_file.open(mode='w') as fp:
             tomlkit.dump(cfg, fp)
