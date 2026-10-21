@@ -119,6 +119,115 @@ class GUI:
         self.state = state
         self.calibrator = calibrator
 
+    def update_sliders(self):
+        self.lbx.sync_state(self.window)
+        self.lby.sync_state(self.window)
+        self.lgx.sync_state(self.window)
+        self.lgy.sync_state(self.window)
+        self.lr.sync_state(self.window)
+        self.plb.sync_state(self.window)
+        self.plg.sync_state(self.window)
+
+    def update_output_channels(self):
+        left_x = self.state.output_dict[self.window['left_x_channel'].get()] if self.window['left_x_channel'].get() != 'None' else AnalogOutput()
+        left_y = self.state.output_dict[self.window['left_y_channel'].get()] if self.window['left_y_channel'].get() != 'None' else AnalogOutput()
+        left_pupil = self.state.output_dict[self.window['pupil_x_channel'].get()] if self.window['pupil_x_channel'].get() != 'None' else AnalogOutput()
+        right_pupil = AnalogOutput()
+        self.state.left_output = AnalogOutputPair(left_x, left_y)
+        self.state.pupil_output = AnalogOutputPair(left_pupil, right_pupil)
+        
+    def update_graph(self):
+        self.graph.erase()
+        # draw axes
+        self.graph.draw_line((-5,0), (5,0))
+        self.graph.draw_line((0,-5), (0,5))
+        self.graph.draw_line((-5,-5), (-5,5))
+        self.graph.draw_line((-5,5), (5,5))
+        self.graph.draw_line((5,5),(5,-5))
+        self.graph.draw_line((5,-5),(-5,-5))
+        self.graph.draw_text('5V', (0.3,4.7), color='black')
+        self.graph.draw_text('5V', (4.7,0.3), color='black')
+        self.graph.draw_text('-5V', (-0.4,-4.7), color='black')
+        self.graph.draw_text('-5V', (-4.6,-0.3), color='black')
+        
+        for xy in range(-5, 6):
+            self.graph.draw_line((xy,-0.1), (xy,0.1))
+            self.graph.draw_line((-0.1,xy), (0.1,xy))
+        
+        clip = lambda x: min(max(x, -5), 5)
+        rx = clip(self.state.right_output.v_out.x)
+        ry = clip(self.state.right_output.v_out.y)
+        lx = clip(self.state.left_output.v_out.x) 
+        ly = clip(self.state.left_output.v_out.y)
+        px = clip(self.state.pupil_output.v_out.x) 
+        py = clip(self.state.pupil_output.v_out.y)
+
+        # Only draw points for tracked eye(s)
+        if self.state.calibration_eye in ("Right", "Both"):
+            self.graph.draw_point((rx, ry), size=.15, color='firebrick1')
+        if self.state.calibration_eye in ("Left", "Both"):
+            self.graph.draw_point((lx, ly), size=.15, color='DodgerBlue')
+        self.graph.draw_point((px, py), size=.15, color='DarkGoldenrod1')
+        
+        int0 = self.state.last_eyes_data.extra.ints[0] & 1
+        int1 = self.state.last_eyes_data.extra.ints[1] & 1
+        self.graph.draw_point((4.3, -4.7), size=.30, color='green' if int0 else 'red')
+        self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
+
+    def update_raw_graph(self, raw_graph, measurements, highlight=[]):
+        raw_graph.erase()
+        raw_graph.draw_line((-100,-100), (-100,100))
+        raw_graph.draw_line((-100,100),(100,100))
+        raw_graph.draw_line((100,100), (100,-100))
+        raw_graph.draw_line((100,-100), (-100,-100))
+        for i, (key,pts) in enumerate(measurements.items()):
+            for p in pts:
+                # draw raw point
+                raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
+        # highlight should be a list of i,j tuples [(i0,j0),(i1,j1),...]
+        for (key,ij) in highlight:
+            pts = measurements[key]
+            p=pts[ij[1]]
+            raw_graph.draw_point((p[0], p[1]), color=self.colorlist[ij[0]], size=8)
+
+
+    def update_cal_graph(self, cal_graph, measurements, cal):
+        cal_graph.erase()
+        cal_graph.draw_line((-5,0), (5,0))
+        cal_graph.draw_line((0,-5), (0,5))
+        cal_graph.draw_line((-5,-5), (-5,5))
+        cal_graph.draw_line((-5,5), (5,5))
+        cal_graph.draw_line((5,5),(5,-5))
+        cal_graph.draw_line((5,-5),(-5,-5))
+        cal_graph.draw_text('5V', (0.3,4.7), color='black')
+        cal_graph.draw_text('5V', (4.7,0.3), color='black')
+        cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
+        cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
+        for xy in range(-5, 6):
+            cal_graph.draw_line((xy,-0.1), (xy,0.1))
+            cal_graph.draw_line((-0.1,xy), (0.1,xy))
+
+        for i, (key,pts) in enumerate(measurements.items()):
+            for p in pts:
+                pp = cal.transform(Point(p[0], p[1]))
+                cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
+
+    def update_calibration_graphs(self):
+        """Called on timer to update calibration graphs.
+        """
+
+        if self.calibrator is not None:
+            m = self.calibrator.measurements
+            b, tempCal = self.calibrator.get_cal()
+            self.update_raw_graph(self.raw_graph, m)
+            self.update_cal_graph(self.cal_graph, m, tempCal)
+            self.all_frames_in_text.update(self.state.frames_in)
+            self.calibration_frames_in_text.update(self.state.calibration_frames_in)
+            self.calibration_frames_out_text.update(self.state.calibration_frames_out)
+            self.calibration_frames_diff_text.update(self.state.calibration_frames_in - self.state.calibration_frames_out)
+
+    def make_window(self):
+
         menu_def = [['File', ['Save Config', 'Load Config', 'Exit']]]
 
         def make_column(title, key, size, resolution, default_value, minimum, maximum, append=[]):
@@ -277,142 +386,33 @@ class GUI:
             [tabs]
         ]
 
-    # def select_subject(self):
-    #     values = ['choice {}'.format(x) for x in range(30)]
-    #     window = sg.Window('Select subject',
-    #         [[sg.Text('Select subject')],
-    #         [sg.DropDown(values, key='-DROP-')],
-    #         [sg.OK(), sg.Cancel()]
-    #     ])
-    #     event, values = window.read()
-    #     window.close()
-    #     return None if event != 'OK' else values['-DROP-']
+        window = sg.Window('OpenIrisClient', self.layout, finalize=True)
+        return window
 
-    def update_sliders(self):
-        self.lbx.sync_state(self.window)
-        self.lby.sync_state(self.window)
-        self.lgx.sync_state(self.window)
-        self.lgy.sync_state(self.window)
-        self.lr.sync_state(self.window)
-        self.plb.sync_state(self.window)
-        self.plg.sync_state(self.window)
-
-    def update_output_channels(self):
-        left_x = self.state.output_dict[self.window['left_x_channel'].get()] if self.window['left_x_channel'].get() != 'None' else AnalogOutput()
-        left_y = self.state.output_dict[self.window['left_y_channel'].get()] if self.window['left_y_channel'].get() != 'None' else AnalogOutput()
-        left_pupil = self.state.output_dict[self.window['pupil_x_channel'].get()] if self.window['pupil_x_channel'].get() != 'None' else AnalogOutput()
-        right_pupil = AnalogOutput()
-        self.state.left_output = AnalogOutputPair(left_x, left_y)
-        self.state.pupil_output = AnalogOutputPair(left_pupil, right_pupil)
-        
-    def update_graph(self):
-        self.graph.erase()
-        # draw axes
-        self.graph.draw_line((-5,0), (5,0))
-        self.graph.draw_line((0,-5), (0,5))
-        self.graph.draw_line((-5,-5), (-5,5))
-        self.graph.draw_line((-5,5), (5,5))
-        self.graph.draw_line((5,5),(5,-5))
-        self.graph.draw_line((5,-5),(-5,-5))
-        self.graph.draw_text('5V', (0.3,4.7), color='black')
-        self.graph.draw_text('5V', (4.7,0.3), color='black')
-        self.graph.draw_text('-5V', (-0.4,-4.7), color='black')
-        self.graph.draw_text('-5V', (-4.6,-0.3), color='black')
-        
-        for xy in range(-5, 6):
-            self.graph.draw_line((xy,-0.1), (xy,0.1))
-            self.graph.draw_line((-0.1,xy), (0.1,xy))
-        
-        clip = lambda x: min(max(x, -5), 5)
-        rx = clip(self.state.right_output.v_out.x)
-        ry = clip(self.state.right_output.v_out.y)
-        lx = clip(self.state.left_output.v_out.x) 
-        ly = clip(self.state.left_output.v_out.y)
-        px = clip(self.state.pupil_output.v_out.x) 
-        py = clip(self.state.pupil_output.v_out.y)
-
-        # Only draw points for tracked eye(s)
-        if self.state.calibration_eye in ("Right", "Both"):
-            self.graph.draw_point((rx, ry), size=.15, color='firebrick1')
-        if self.state.calibration_eye in ("Left", "Both"):
-            self.graph.draw_point((lx, ly), size=.15, color='DodgerBlue')
-        self.graph.draw_point((px, py), size=.15, color='DarkGoldenrod1')
-        
-        int0 = self.state.last_eyes_data.extra.ints[0] & 1
-        int1 = self.state.last_eyes_data.extra.ints[1] & 1
-        self.graph.draw_point((4.3, -4.7), size=.30, color='green' if int0 else 'red')
-        self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
-
-    def update_raw_graph(self, raw_graph, measurements, highlight=[]):
-        raw_graph.erase()
-        raw_graph.draw_line((-100,-100), (-100,100))
-        raw_graph.draw_line((-100,100),(100,100))
-        raw_graph.draw_line((100,100), (100,-100))
-        raw_graph.draw_line((100,-100), (-100,-100))
-        for i, (key,pts) in enumerate(measurements.items()):
-            for p in pts:
-                # draw raw point
-                raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
-        # highlight should be a list of i,j tuples [(i0,j0),(i1,j1),...]
-        for (key,ij) in highlight:
-            pts = measurements[key]
-            p=pts[ij[1]]
-            raw_graph.draw_point((p[0], p[1]), color=self.colorlist[ij[0]], size=8)
-
-
-    def update_cal_graph(self, cal_graph, measurements, cal):
-        cal_graph.erase()
-        cal_graph.draw_line((-5,0), (5,0))
-        cal_graph.draw_line((0,-5), (0,5))
-        cal_graph.draw_line((-5,-5), (-5,5))
-        cal_graph.draw_line((-5,5), (5,5))
-        cal_graph.draw_line((5,5),(5,-5))
-        cal_graph.draw_line((5,-5),(-5,-5))
-        cal_graph.draw_text('5V', (0.3,4.7), color='black')
-        cal_graph.draw_text('5V', (4.7,0.3), color='black')
-        cal_graph.draw_text('-5V', (-0.4,-4.7), color='black')
-        cal_graph.draw_text('-5V', (-4.6,-0.3), color='black')
-        for xy in range(-5, 6):
-            cal_graph.draw_line((xy,-0.1), (xy,0.1))
-            cal_graph.draw_line((-0.1,xy), (0.1,xy))
-
-        for i, (key,pts) in enumerate(measurements.items()):
-            for p in pts:
-                pp = cal.transform(Point(p[0], p[1]))
-                cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
-
-    def update_calibration_graphs(self):
-        """Called on timer to update calibration graphs.
-        """
-
-        if self.calibrator is not None:
-            m = self.calibrator.measurements
-            b, tempCal = self.calibrator.get_cal()
-            self.update_raw_graph(self.raw_graph, m)
-            self.update_cal_graph(self.cal_graph, m, tempCal)
-            self.all_frames_in_text.update(self.state.frames_in)
-            self.calibration_frames_in_text.update(self.state.calibration_frames_in)
-            self.calibration_frames_out_text.update(self.state.calibration_frames_out)
-            self.calibration_frames_diff_text.update(self.state.calibration_frames_in - self.state.calibration_frames_out)
-        
-
-    def window_loop(self, verbose=False):
+    def window_loop(self, verbose=False, subject=None):
 
         # Allow user to select a configuration
         # TODO: Remember configuration used last time this program ran.
-        tmp = GlobalState.select_subject()
-        logger.info(f"Got subject {tmp}")
+        if not subject:
+            subject = GlobalState.select_subject()
+        logger.info(f"Got subject {subject}")
+        if not subject:
+            self.state.is_running = False
+        else:
+            self.state.load_config(subject=subject)
 
-        self.window = sg.Window('OpenIrisClient', self.layout, finalize=True)
-        self.graph.bind('<Motion>', '-mouse-motion')
-        #TEMP MOVE UPDATE TO REGULAR TIMEOUT self.window.timer_start(500, key='calibration-graphs', repeating=True)
+        # Make window here. This ensures that the loaded config is the one in the window
+        self.window = self.make_window()
         first = True
+
         while self.state.is_running:
             event, values = self.window.read(timeout=20) # 20ms = 50Hz
             # if event != '__TIMEOUT__':
             #     print(event, values)
             if first:
+                self.graph.bind('<Motion>', '-mouse-motion')
                 self.update_output_channels()
+                self.update_sliders()
                 first = False
             if verbose and event != sg.TIMEOUT_EVENT:
                 logger.info(event, values)
@@ -493,18 +493,27 @@ class GUI:
                 pass
 
             # Save config
-            if event == 'Save Config':
-                # Open a dialog to select a new file
-                save_dir = sg.popup_get_folder('Select save directory', default_path=self.state.save_dir)
-                self.state.save(Path(save_dir))
+            # if event == 'Save Config':
+            #     # Open a dialog to select a new file
+            #     save_dir = sg.popup_get_folder('Select save directory', default_path=self.state.save_dir)
+            #     self.state.save(Path(save_dir))
 
             # Load config
             if event == 'Load Config':
-                # Open a folder picking dialog
-                load_dir = sg.popup_get_folder('Select directory to load', default_path=self.state.save_dir)
-                if load_dir:
-                    self.state.load(Path(load_dir))
-                    self.update_sliders()
+
+                subject = GlobalState.select_subject()
+                logger.info(f"Got subject {subject}")
+                if subject:
+                    self.state.load_config(subject=subject)
+                    self.window.close()
+                    self.window = self.make_window()
+                    first = True
+
+                # # Open a folder picking dialog
+                # load_dir = sg.popup_get_folder('Select directory to load', default_path=self.state.save_dir)
+                # if load_dir:
+                #     self.state.load(Path(load_dir))
+                #     self.update_sliders()
 
             if self.calibrator is not None:
                 if event == 'cal-edit-points':
@@ -686,7 +695,7 @@ if __name__ == "__main__":
     parser.add_argument("--fps", help="Capture rate, in frames per second, of eye tracker.", type=int, default=0)
     parser.add_argument("--eye", help="Eye to calibrate from. If single camera, configure it correctly. If dual, then this must be specified.", type=str, default='')
     parser.add_argument("--tracker-folder", help="Folder with the EyeTrackerSettings.xml file", type=str, default='')
-    parser.add_argument("--subject", help="Current subject (part of path to config file)", type=str, default='')
+    parser.add_argument("--subject", help="Current subject (part of path to config file)", type=str, default=None)
     args = parser.parse_args()
 
     # # if no subject was specified, open selection dialog
@@ -694,7 +703,7 @@ if __name__ == "__main__":
     #     subject = GlobalState.select_subject()    
     #     print(f"Selected subject {subject}")
 
-
+    print(f"args.subject: {str(args.subject)}")
     if not args.fake:
         kwargs = {'server_address': args.address, 'port': args.port}
     else:
@@ -738,7 +747,7 @@ if __name__ == "__main__":
         dio_thread = DIOThread(dio_stop_event, gs)
         dio_thread.start()
 
-    gui_thread = Thread(target=GUI(gs, calibrator_ana_thread).window_loop, args=(False,))
+    gui_thread = Thread(target=GUI(gs, calibrator_ana_thread).window_loop, args=(False,args.subject))
     gui_thread.start()
 
     # start data pipeline
