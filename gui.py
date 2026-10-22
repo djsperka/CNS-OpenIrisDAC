@@ -129,6 +129,13 @@ class GUI:
         self.plg.sync_state(self.window)
 
     def update_output_channels(self):
+        """Event callback for any of the analog output channel combo boxes. Only the left eye outputs are configured here! The state variables
+        containing the keys are also updated, but are only used when the config is saved. 
+        """
+        self.state.left_x_channel = self.window['left_x_channel'].get()
+        self.state.left_y_channel = self.window['left_y_channel'].get()
+        self.state.pupil_x_channel = self.window['pupil_x_channel'].get()
+        logger.info(f"Update output channels: {self.state.left_x_channel}, {self.state.left_y_channel}, {self.state.pupil_x_channel}")
         left_x = self.state.output_dict[self.window['left_x_channel'].get()] if self.window['left_x_channel'].get() != 'None' else AnalogOutput()
         left_y = self.state.output_dict[self.window['left_y_channel'].get()] if self.window['left_y_channel'].get() != 'None' else AnalogOutput()
         left_pupil = self.state.output_dict[self.window['pupil_x_channel'].get()] if self.window['pupil_x_channel'].get() != 'None' else AnalogOutput()
@@ -345,16 +352,18 @@ class GUI:
             ])
 
         lt = sg.Tab('Left Eye', [[dd_col,graph_col]])
-        
+
         self.output_list = list(self.state.output_dict.keys())
         self.output_list.insert(0, 'None')
         settings_layout = [
             [sg.Text('Channels: ')],
-            [sg.Text('Eye X: '), sg.Combo(self.output_list, default_value=self.output_list[1] if len(self.output_list) > 1 else 'None', 
+
+            # find each output list key in self.state.output_dict.keys()
+            [sg.Text('Eye X: '), sg.Combo(self.output_list, default_value=self.state.left_x_channel if self.state.left_x_channel in self.output_list else 'None', 
                                            key='left_x_channel', enable_events=True)],
-            [sg.Text('Eye Y: '), sg.Combo(self.output_list, default_value=self.output_list[2] if len(self.output_list) > 2 else 'None', 
+            [sg.Text('Eye Y: '), sg.Combo(self.output_list, default_value=self.state.left_y_channel if self.state.left_y_channel in self.output_list else 'None', 
                                             key='left_y_channel', enable_events=True)],
-            [sg.Text('Pupil: '), sg.Combo(self.output_list, default_value=self.output_list[5] if len(self.output_list) > 5 else 'None', 
+            [sg.Text('Pupil: '), sg.Combo(self.output_list, default_value=self.state.pupil_x_channel if self.state.pupil_x_channel in self.output_list else 'None', 
                                             key='pupil_x_channel', enable_events=True)]
         ]
         st = sg.Tab('Settings', settings_layout)
