@@ -229,10 +229,10 @@ class GUI:
             b, tempCal = self.calibrator.get_cal()
             self.update_raw_graph(self.raw_graph, m)
             self.update_cal_graph(self.cal_graph, m, tempCal)
-            self.all_frames_in_text.update(self.state.frames_in)
-            self.calibration_frames_in_text.update(self.state.calibration_frames_in)
-            self.calibration_frames_out_text.update(self.state.calibration_frames_out)
-            self.calibration_frames_diff_text.update(self.state.calibration_frames_in - self.state.calibration_frames_out)
+            # self.all_frames_in_text.update(self.state.frames_in)
+            # self.calibration_frames_in_text.update(self.state.calibration_frames_in)
+            # self.calibration_frames_out_text.update(self.state.calibration_frames_out)
+            # self.calibration_frames_diff_text.update(self.state.calibration_frames_in - self.state.calibration_frames_out)
 
     def make_window(self):
 
@@ -376,16 +376,10 @@ class GUI:
         graph_column = sg.Column([[self.raw_graph],[self.cal_graph]], element_justification='center')
 
         # second column for other stuff.
-        self.all_frames_in_text = sg.Text('0', size=16)
-        self.calibration_frames_in_text = sg.Text('0', size=16)
-        self.calibration_frames_out_text = sg.Text('0', size=16)
-        self.calibration_frames_diff_text = sg.Text('0', size=16)
         other_column = sg.Column([[sg.Button('Try to fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Edit points', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Accept fit', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')],
-#                                  [sg.Button('Load', key='cal-load', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.VPush()], [sg.Text('All frames in: '), self.all_frames_in_text, sg.Text('Cal frames in: '), self.calibration_frames_in_text], [sg.Text('Cal frames out: '), self.calibration_frames_out_text], [sg.Text('Diff: '), self.calibration_frames_diff_text]])
+                                  [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')]])
         calibration_layout = [[graph_column,other_column]]        
         ct = sg.Tab('Calibration', calibration_layout)
 
