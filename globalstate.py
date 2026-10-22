@@ -54,6 +54,7 @@ class GlobalState:
         # count frames received
         self.frames_in = 0
         self.frames_start_time = 0.0  # time when first frame received
+        self.frames_missed = 0
         
         # this stuff for calibration
         self.calibrating = False

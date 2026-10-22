@@ -11,6 +11,7 @@ from platformdirs import PlatformDirs
 from pathlib import Path
 import copy
 import argparse
+import time
 from dac_common import AnalogOutput, AnalogOutputPair
 from globalstate import GlobalState
 import logging
@@ -392,7 +393,8 @@ class GUI:
         
         self.layout = [
             [sg.Menu(menu_def)],
-            [tabs]
+            [tabs],
+            [sg.StatusBar('Status', key='statusbar', size=(100,1))]
         ]
 
         window = sg.Window('OpenIrisClient', self.layout, finalize=True)
@@ -425,6 +427,10 @@ class GUI:
                 first = False
             if verbose and event != sg.TIMEOUT_EVENT:
                 logger.info(event, values)
+
+                        # update status bar
+            if event == sg.TIMEOUT_EVENT:
+                self.window['statusbar'].update(f"{'Calibrating' if self.state.calibrating else 'Running'} : {self.state.subject} : frames in {self.state.frames_in} : rate {self.state.frames_in/(time.monotonic() - self.state.frames_start_time):>3.1f} fps : missed {self.state.frames_missed}")
 
             # handle exit
             if event == sg.WIN_CLOSED or event == 'Close' or event == 'Exit':
@@ -523,6 +529,7 @@ class GUI:
                 # if load_dir:
                 #     self.state.load(Path(load_dir))
                 #     self.update_sliders()
+
 
             if self.calibrator is not None:
                 if event == 'cal-edit-points':
