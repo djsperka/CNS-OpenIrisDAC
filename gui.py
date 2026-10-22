@@ -130,12 +130,12 @@ class GUI:
 
     def update_output_channels(self):
         """Event callback for any of the analog output channel combo boxes. Only the left eye outputs are configured here! The state variables
-        containing the keys are also updated, but are only used when the config is saved. 
+        containing the keys are also updated, but are only used when the config is saved. This method will get called twice, as there are two events
+        associated with changing a selection. The first will have all current values, the second call will see the changed value.
         """
         self.state.left_x_channel = self.window['left_x_channel'].get()
         self.state.left_y_channel = self.window['left_y_channel'].get()
         self.state.pupil_x_channel = self.window['pupil_x_channel'].get()
-        logger.info(f"Update output channels: {self.state.left_x_channel}, {self.state.left_y_channel}, {self.state.pupil_x_channel}")
         left_x = self.state.output_dict[self.window['left_x_channel'].get()] if self.window['left_x_channel'].get() != 'None' else AnalogOutput()
         left_y = self.state.output_dict[self.window['left_y_channel'].get()] if self.window['left_y_channel'].get() != 'None' else AnalogOutput()
         left_pupil = self.state.output_dict[self.window['pupil_x_channel'].get()] if self.window['pupil_x_channel'].get() != 'None' else AnalogOutput()
