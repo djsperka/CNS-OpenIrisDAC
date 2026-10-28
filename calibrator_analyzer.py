@@ -295,12 +295,24 @@ class Calibrator(Thread):
         # Originally, the button info was saved ONLY IF the current data was OK - i.e. pupil, CR, and P4 data were
         # all good. This is probably too restrictive, saving the button info regardless. The button check will filter
         # out bad data.
+        # 
+        # Updated to check value of calibration_fixation_on, which approximates the time when the fixpt is on screen. 
+        # If button is pressed when a fixpt is NOT on, we will ignore it. 
+        # TODO: Make sure we only accept one button per fixpt!
 
         if self._button_up:
             if button_is_pressed:
                 self._button_up = False
-                self._button_list.append(ButtonPressInfo(self.counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
-                logger.info(f"Button at {self.counter} x={ed.extra.doubles[7]}, y={ed.extra.doubles[8]}")
+                with in_cal_lock:
+                    if self.globalstate.calibration_fixation_on:
+                        if not self.globalstate.calibration_fixation_button_accepted:
+                            self._button_list.append(ButtonPressInfo(self.counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
+                            self.globalstate.calibration_fixation_button_accepted = True    # only one button per fixpt
+                            logger.info(f"Button at {self.counter} x={ed.extra.doubles[7]}, y={ed.extra.doubles[8]}")
+                        else:
+                            logger.info("Button already pressed for this fixation point. Ignoring.")
+                    else:
+                        logger.info(f"Button pressed when no fixpt on screen. Ignoring button press.")
 
         else:
             if not button_is_pressed:

@@ -152,7 +152,7 @@ class CalibratorComm(Thread):
             logger.info("Received calstop.")
             self.state.calibrating= False
         elif command.startswith("X"):
-            pass
+            self.state.calibration_fixation_on = False
         else:
             command_and_arg = command.split(maxsplit=1)
             if len(command_and_arg) < 2:
@@ -178,6 +178,8 @@ class CalibratorComm(Thread):
                 with in_cal_lock:
                     self.state.calibration_fixation_x = x
                     self.state.calibration_fixation_y = y
+                    self.state.calibration_fixation_on = True
+                    self.state.calibration_fixation_button_accepted = False
 
             elif command_and_arg[0] == "DEGPERVOLT":
                 # Handle 'V' command with two numeric values separated by a comma

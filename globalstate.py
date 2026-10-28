@@ -64,6 +64,8 @@ class GlobalState:
         self.calibration_diobits = int(0)
         self.calibration_fixation_x = 99999.9
         self.calibration_fixation_y = 99999.9
+        self.calibration_fixation_on = False    # set to True when a fixation point is received, False when X is received. Approximates telling when fix is on.
+        self.calibration_fixation_button_accepted = False   # set to True when a button is accepted for a fixpt, set to False when fixpt is off. Only accept one button per fixpt!
         self.calibration_recording = False
         self.calibration_frames_in = 0          # how many get pushed into queue
         self.calibration_frames_out = 0         # how many get popped from queue
