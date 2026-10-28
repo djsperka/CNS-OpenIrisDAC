@@ -126,16 +126,34 @@ class Calibrator(Thread):
         return self._have_cal, self._cal
 
     def clear_cal(self):
+
         # clear calibration and data
         self._have_cal = False
         self._invalidated = True   # re-draw without the resultant points
 
+        # zero out data arrays
+        self._pupil_xy[:] = 0
+        self._cr_xy[:] = 0
+        self._p4_xy[:] = 0
+        self._pupil_xy[:] = 0
+        self._pupil_xy[:] = 0
+        logger.info(f"Cleared data arrays with {self._max_frames} elements.")
+
+        # reset measurements
+        self._meas = defaultdict(list)
+        self._invalidated = True
+        self._cal = CalibrationParameters(0,0,1,1,0)
+        self._have_cal = False
+        
+        # reset state
+        self._counter = 0
+        self._button_up = True
+        self._button_list: List[ButtonPressInfo] = [] # (index,x,y)
+        self._framesig_on = False
+        self._framesig_on_at = 0
+
     def run(self):
 
-        # If we record calibration data, these are used to manage it
-        bFileIsOpen = False
-        pathRecFile = None
-        fdRecFile = None
         idle_wait = 0.1    # sleep time in idle loop
         data_timeout = 1/self.globalstate.capture_fps
         logger.info(f"Capture fps {self.globalstate.capture_fps}, data_timeout {data_timeout}")
@@ -176,16 +194,6 @@ class Calibrator(Thread):
                             self.globalstate.calibration_frames_out += 1
                     except Empty:
                         continue
-
-                # if state is changed, then check if file needs to be closed
-                if self._state != self.States.CHECK:
-                    if bFileIsOpen:
-                        fdRecFile.close()
-                        bFileIsOpen = False
-                        pathRecFile = None
-                        fdRecFile = None
-                    # write xy points to file
-                    pathXYFile = self.globalstate.data_path / datetime.datetime.now().strftime("cal-%Y-%m-%d-%H-%M.xy")
 
     def load_measurements(self, pathToUse):
         meas = defaultdict(list)
@@ -341,7 +349,8 @@ class Calibrator(Thread):
                 if binf.vx < 900 and binf.vy < 900:
                     if binf.ind+self._nafter < self._counter:
                         crsig = self.get_crsig(binf.ind-self._nbefore, binf.ind+self._nafter)
-                        if self._check_velocity(crsig, self._vmax):
+                        # add a check for crsig being empty
+                        if crsig.size > 0 and self._check_velocity(crsig, self._vmax):
                             m = crsig.mean(axis=1)
                             self._meas[(binf.vx,binf.vy)].append(m)
                             self._invalidated = True

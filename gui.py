@@ -225,7 +225,7 @@ class GUI:
         """
 
         if self.calibrator is not None:
-            m = self.calibrator.measurements
+            m = self.calibrator.measurements.copy()     # make copy in case something is added during write
             b, tempCal = self.calibrator.get_cal()
             self.update_raw_graph(self.raw_graph, m)
             self.update_cal_graph(self.cal_graph, m, tempCal)
@@ -536,6 +536,7 @@ class GUI:
 
                 if event == 'cal-clear':
                     self.calibrator.clear_cal()
+                    self.update_calibration_graphs()
 
                 if event == 'cal-accept':
                     b, cal = self.calibrator.get_cal()
