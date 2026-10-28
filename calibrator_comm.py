@@ -151,56 +151,60 @@ class CalibratorComm(Thread):
         elif command.lower().startswith("calstop"):
             logger.info("Received calstop.")
             self.state.calibrating= False
-        elif command.startswith("F "):
-            # Handle 'F' command with a single argument formatted as "x,y,d,c"
-            parts = command.split(maxsplit=1)
-            if len(parts) < 2:
-                return "ERROR: F command requires an argument in format x,y,d,c"
-
-            payload = parts[1]
-            fields = payload.split(",")
-            if len(fields) != 4:
-                return "ERROR: F argument must be x,y,d,c"
-
-            try:
-                x = float(fields[0])
-                y = float(fields[1])
-                d = float(fields[2])
-                c = fields[3]
-            except ValueError:
-                return "ERROR: x, y, and d must be numbers"            
-            logger.info(f"Received F command with x={x}, y={y}, d={d}, c={c}")
-            with in_cal_lock:
-                self.state.calibration_fixation_x = x
-                self.state.calibration_fixation_y = y
-
-        elif command.startswith("V "):
-            # Handle 'V' command with two numeric values separated by a comma
-            parts = command.split(maxsplit=1)
-            if len(parts) < 2:
-                return "ERROR: V command requires vpdx,vpdy"
-
-            coords = parts[1].split(",")
-            if len(coords) != 2:
-                return "ERROR: V command requires vpdx,vpdy"
-
-            try:
-                vpdx = float(coords[0])
-                vpdy = float(coords[1])
-            except ValueError:
-                return "ERROR: V command values must be numbers"
-
-            if not (0 <= vpdx <= 5) or not (0 <= vpdy <= 5):
-                return "ERROR: V command values must be between 0 and 5"
-
-            # TODO: Implement V command handling for vpdx and vpdy
-            print(f"Received V command with vpdx={vpdx}, vpdy={vpdy}")
-            with in_cal_lock:
-                self.state.calibration_vpdx = vpdx
-                self.state.calibration_vpdy = vpdy
-
+        elif command.startswith("X"):
+            pass
         else:
-            response = "ERROR: Unknown command"
+            command_and_arg = command.split(maxsplit=1)
+            if len(command_and_arg) < 2:
+                logger.error("Expecting calstart|calstop|command args")
+                return "ERROR: Expecting calstart|calstop|command args"
+
+            if command_and_arg[0] == "F":
+                # Handle 'F' command with a single argument formatted as "x,y,d,c"
+                fields = command_and_arg[1].split(",")
+                if len(fields) != 4:
+                    logger.error("F argument must be x,y,d,c")
+                    return "ERROR: F argument must be x,y,d,c"
+
+                try:
+                    x = float(fields[0])
+                    y = float(fields[1])
+                    d = float(fields[2])
+                    c = fields[3]
+                except ValueError:
+                    logger.error("In F command x, y, and d must be numbers")
+                    return "ERROR: x, y, and d must be numbers"            
+                logger.info(f"Received F command with x={x}, y={y}, d={d}, c={c}")
+                with in_cal_lock:
+                    self.state.calibration_fixation_x = x
+                    self.state.calibration_fixation_y = y
+
+            elif command_and_arg[0] == "DEGPERVOLT":
+                # Handle 'V' command with two numeric values separated by a comma
+                parts = command_and_arg[1].split(",")
+                if len(parts) != 2:
+                    logger.error("DEGPERVOLT command requires degpervolt_x,degpervolt_y")
+                    return "ERROR: DEGPERVOLT command requires degpervolt_x,degpervolt_y"
+
+                try:
+                    dpvx = float(parts[0])
+                    dpvy = float(parts[1])
+                except ValueError:
+                    logger.error("DEGPERVOLT command values must be numbers")
+                    return "ERROR: DEGPERVOLT command values must be numbers"
+
+                if not (0 <= dpvx <= 10) or not (0 <= dpvy <= 10):
+                    logger.error("DEGPERVOLT command values must be between 0 and 10")
+                    return "ERROR: DEGPERVOLT command values must be between 0 and 10"
+
+                # TODO: Implement V command handling for vpdx and vpdy
+                logger.info(f"Received DEGPERVOLT command with volts/degX {dpvx} volts/degY {dpvy}")
+                with in_cal_lock:
+                    self.state.calibration_vpdx = 1/dpvx
+                    self.state.calibration_vpdy = 1/dpvy
+
+            else:
+                response = "ERROR: Unknown command"
         
         return response if response is not None else ""
     
