@@ -67,11 +67,11 @@ class CalibrationParameters:
 
     def to_table(self):
         table = tomlkit.table()
-        table.add('x_bias', self.x_bias)
-        table.add('y_bias', self.y_bias)
-        table.add('x_gain', self.x_gain)
-        table.add('y_gain', self.y_gain)
-        table.add('rotation', self.rotation)
+        table.add('x_bias', float(self.x_bias))
+        table.add('y_bias', float(self.y_bias))
+        table.add('x_gain', float(self.x_gain))
+        table.add('y_gain', float(self.y_gain))
+        table.add('rotation', float(self.rotation))
         return table
 
     
