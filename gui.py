@@ -20,14 +20,15 @@ from dac_common import CalibrationParameters
 
 logger = logging.getLogger(__name__)
 MAIN_GRAPH_CANVAS_SIZE = (600, 600)
-MAIN_GRAPH_BOTTOM_LEFT = (-5.1, -5.1)
-MAIN_GRAPH_TOP_RIGHT = (5.1, 5.1)
+#MAIN_GRAPH_BOTTOM_LEFT = (-5.1, -5.1)
+#MAIN_GRAPH_TOP_RIGHT = (5.1, 5.1)
 RAW_GRAPH_CANVAS_SIZE = (400, 400)
 RAW_GRAPH_BOTTOM_LEFT = (-105, -105)
 RAW_GRAPH_TOP_RIGHT = (105, 105)
 CAL_GRAPH_CANVAS_SIZE = (400, 400)
 CAL_GRAPH_BOTTOM_LEFT = (-5.1, -5.1)
 CAL_GRAPH_TOP_RIGHT = (5.1, 5.1)
+MAX_VOLTS = 5.0
 
 
 class GUIField:
@@ -146,21 +147,46 @@ class GUI:
         
     def update_graph(self):
         self.graph.erase()
+
+        # update coord system. Only needed when vpdx, vpdy change! 
+        graph_x_max = MAX_VOLTS / self.state.calibration_vpdx
+        graph_y_max = MAX_VOLTS / self.state.calibration_vpdy
+        self.graph.change_coordinates(graph_bottom_left=(-graph_x_max, -graph_y_max), graph_top_right=(graph_x_max, graph_y_max))
+
         # draw axes
-        self.graph.draw_line((-5,0), (5,0))
-        self.graph.draw_line((0,-5), (0,5))
-        self.graph.draw_line((-5,-5), (-5,5))
-        self.graph.draw_line((-5,5), (5,5))
-        self.graph.draw_line((5,5),(5,-5))
-        self.graph.draw_line((5,-5),(-5,-5))
-        self.graph.draw_text('5V', (0.3,4.7), color='black')
-        self.graph.draw_text('5V', (4.7,0.3), color='black')
-        self.graph.draw_text('-5V', (-0.4,-4.7), color='black')
-        self.graph.draw_text('-5V', (-4.6,-0.3), color='black')
+        self.graph.draw_line((-graph_x_max,0), (graph_x_max,0))
+        self.graph.draw_line((0,-graph_y_max), (0,graph_y_max))
+
+        # draw x grid lines
+        for x in range(1, int(graph_x_max)+1):
+            if x%5:
+                color='grey90'
+            else:
+                color='grey75'
+            self.graph.draw_line((x, graph_y_max), (x, -graph_y_max), color=color)
+            self.graph.draw_line((-x, graph_y_max), (-x, -graph_y_max), color=color)
+
+        # draw y grid lines
+        for y in range(1, int(graph_y_max)+1):
+            if y%5:
+                color='grey90'
+            else:
+                color='grey75'
+            self.graph.draw_line((-graph_x_max, y), (graph_x_max, y), color=color)
+            self.graph.draw_line((-graph_x_max, -y), (graph_x_max, -y), color=color)
+
+        # self.graph.draw_line((-5,-5), (-5,5))
+        # self.graph.draw_line((-5,5), (5,5))
+        # self.graph.draw_line((5,5),(5,-5))
+        # self.graph.draw_line((5,-5),(-5,-5))
+        # self.graph.draw_text('5V', (0.3,4.7), color='black')
+        # self.graph.draw_text('5V', (4.7,0.3), color='black')
+        # self.graph.draw_text('-5V', (-0.4,-4.7), color='black')
+        # self.graph.draw_text('-5V', (-4.6,-0.3), color='black')
         
-        for xy in range(-5, 6):
-            self.graph.draw_line((xy,-0.1), (xy,0.1))
-            self.graph.draw_line((-0.1,xy), (0.1,xy))
+        # for xy in range(-5, 6):
+        #     self.graph.draw_line((xy,-0.1), (xy,0.1))
+        #     self.graph.draw_line((-0.1,xy), (0.1,xy))
         
         clip = lambda x: min(max(x, -5), 5)
         rx = clip(self.state.right_output.v_out.x)
@@ -177,10 +203,10 @@ class GUI:
             self.graph.draw_point((lx, ly), size=.15, color='DodgerBlue')
         self.graph.draw_point((px, py), size=.15, color='DarkGoldenrod1')
         
-        int0 = self.state.last_eyes_data.extra.ints[0] & 1
-        int1 = self.state.last_eyes_data.extra.ints[1] & 1
-        self.graph.draw_point((4.3, -4.7), size=.30, color='green' if int0 else 'red')
-        self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
+        # int0 = self.state.last_eyes_data.extra.ints[0] & 1
+        # int1 = self.state.last_eyes_data.extra.ints[1] & 1
+        # self.graph.draw_point((4.3, -4.7), size=.30, color='green' if int0 else 'red')
+        # self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
 
     def update_raw_graph(self, raw_graph, measurements, highlight=[]):
         raw_graph.erase()
@@ -325,7 +351,11 @@ class GUI:
                 ]
             ))
 
-        self.graph = sg.Graph(canvas_size=MAIN_GRAPH_CANVAS_SIZE, graph_bottom_left=MAIN_GRAPH_BOTTOM_LEFT, graph_top_right=MAIN_GRAPH_TOP_RIGHT, background_color='white', key='graph')
+        # max degrees in x and y. Degrees are used for coordinates/plotting in the main graph. The canvas size is in pixels.
+        graph_x_max = MAX_VOLTS / self.state.calibration_vpdx
+        graph_y_max = MAX_VOLTS / self.state.calibration_vpdy
+        
+        self.graph = sg.Graph(canvas_size=MAIN_GRAPH_CANVAS_SIZE, graph_bottom_left=(-graph_x_max, -graph_y_max), graph_top_right=(graph_x_max, graph_y_max), background_color='white', key='graph')
         self.cbmouse = sg.Checkbox("Mouse Mode", key='check-mouse-mode', enable_events=True, default=self.state.is_mouse_mode)
 
         graph_col = sg.Column([
@@ -335,8 +365,8 @@ class GUI:
             ])
         x_bias = -MAIN_GRAPH_CANVAS_SIZE[0]/2
         y_bias = -MAIN_GRAPH_CANVAS_SIZE[1]/2
-        x_gain =  (MAIN_GRAPH_TOP_RIGHT[0]-MAIN_GRAPH_BOTTOM_LEFT[0])/MAIN_GRAPH_CANVAS_SIZE[0]
-        y_gain = -(MAIN_GRAPH_TOP_RIGHT[1]-MAIN_GRAPH_BOTTOM_LEFT[1])/MAIN_GRAPH_CANVAS_SIZE[1]
+        x_gain =  (2 * graph_x_max)/MAIN_GRAPH_CANVAS_SIZE[0]
+        y_gain = -(2 * graph_y_max)/MAIN_GRAPH_CANVAS_SIZE[1]
         self.mouse_to_volts = CalibrationParameters(x_bias=x_bias, y_bias=y_bias, x_gain=x_gain, y_gain=y_gain, rotation=0)
 
         dd_col = sg.Column([
@@ -468,7 +498,8 @@ class GUI:
                 else:
                     self.graph.update(background_color = 'white')
 
-            # mouse on graph? 
+            # mouse mode. The mouse event xy value is in graph pixels. The transform is for converting it to 
+            # degrees. 
             if event == 'graph-mouse-motion':
                 if self.state.is_mouse_mode:
                     e = self.graph.user_bind_event
