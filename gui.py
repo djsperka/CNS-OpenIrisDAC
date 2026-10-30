@@ -146,18 +146,41 @@ class GUI:
         self.state.pupil_output = AnalogOutputPair(left_pupil, right_pupil)
         
     def update_graph(self):
+        # clear graph
         self.graph.erase()
 
+        # TODO - make checkbox to display degrees or volts
+        showDegrees = True
+
         # update coord system. Only needed when vpdx, vpdy change! 
-        graph_x_max = MAX_VOLTS / self.state.calibration_vpdx
-        graph_y_max = MAX_VOLTS / self.state.calibration_vpdy
+        # These are max (degrees), assuming that the DAC puts out values from -MAX_VOLTS to MAX_VOLTS.
+        # Assign current values to be output, depending on whether we're showing degrees or volts.
+        if showDegrees:
+            graph_x_max = MAX_VOLTS / self.state.calibration_vpdx
+            graph_y_max = MAX_VOLTS / self.state.calibration_vpdy
+            right_x = self.state.right_output.v_out.x / self.state.calibration_vpdx
+            right_y = self.state.right_output.v_out.y / self.state.calibration_vpdy
+            left_x = self.state.left_output.v_out.x / self.state.calibration_vpdx
+            left_y = self.state.left_output.v_out.y / self.state.calibration_vpdy
+            pupil_x = self.state.pupil_output.v_out.x / self.state.calibration_vpdx
+            pupil_y = self.state.pupil_output.v_out.y / self.state.calibration_vpdy
+        else:
+            graph_x_max = MAX_VOLTS
+            graph_y_max = MAX_VOLTS
+            right_x = self.state.right_output.v_out.x
+            right_y = self.state.right_output.v_out.y
+            left_x = self.state.left_output.v_out.x
+            left_y = self.state.left_output.v_out.y
+            pupil_x = self.state.pupil_output.v_out.x
+            pupil_y = self.state.pupil_output.v_out.y
+
         self.graph.change_coordinates(graph_bottom_left=(-graph_x_max, -graph_y_max), graph_top_right=(graph_x_max, graph_y_max))
 
         # draw axes
         self.graph.draw_line((-graph_x_max,0), (graph_x_max,0))
         self.graph.draw_line((0,-graph_y_max), (0,graph_y_max))
 
-        # draw x grid lines
+        # draw x grid lines. Every 5th is darker.
         for x in range(1, int(graph_x_max)+1):
             if x%5:
                 color='grey90'
@@ -166,7 +189,7 @@ class GUI:
             self.graph.draw_line((x, graph_y_max), (x, -graph_y_max), color=color)
             self.graph.draw_line((-x, graph_y_max), (-x, -graph_y_max), color=color)
 
-        # draw y grid lines
+        # draw y grid lines. Every 5th is darker.
         for y in range(1, int(graph_y_max)+1):
             if y%5:
                 color='grey90'
@@ -175,26 +198,15 @@ class GUI:
             self.graph.draw_line((-graph_x_max, y), (graph_x_max, y), color=color)
             self.graph.draw_line((-graph_x_max, -y), (graph_x_max, -y), color=color)
 
-        # self.graph.draw_line((-5,-5), (-5,5))
-        # self.graph.draw_line((-5,5), (5,5))
-        # self.graph.draw_line((5,5),(5,-5))
-        # self.graph.draw_line((5,-5),(-5,-5))
-        # self.graph.draw_text('5V', (0.3,4.7), color='black')
-        # self.graph.draw_text('5V', (4.7,0.3), color='black')
-        # self.graph.draw_text('-5V', (-0.4,-4.7), color='black')
-        # self.graph.draw_text('-5V', (-4.6,-0.3), color='black')
-        
-        # for xy in range(-5, 6):
-        #     self.graph.draw_line((xy,-0.1), (xy,0.1))
-        #     self.graph.draw_line((-0.1,xy), (0.1,xy))
-        
-        clip = lambda x: min(max(x, -5), 5)
-        rx = clip(self.state.right_output.v_out.x)
-        ry = clip(self.state.right_output.v_out.y)
-        lx = clip(self.state.left_output.v_out.x) 
-        ly = clip(self.state.left_output.v_out.y)
-        px = clip(self.state.pupil_output.v_out.x) 
-        py = clip(self.state.pupil_output.v_out.y)
+        clipx = lambda x: min(max(x, -graph_x_max), graph_x_max)
+        clipy = lambda y: min(max(y, -graph_y_max), graph_y_max)
+
+        rx = clipx(right_x)
+        ry = clipy(right_y)
+        lx = clipx(left_x) 
+        ly = clipy(left_y)
+        px = clipx(pupil_x) 
+        py = clipy(pupil_y)
 
         # Only draw points for tracked eye(s)
         if self.state.calibration_eye in ("Right", "Both"):
