@@ -375,10 +375,13 @@ class GUI:
             [self.graph],
             [self.cbmouse]
             ])
+
+        # this transform is used for converting raw mouse coordinates, which are in canvas pixel coordinates, into 
+        # volts for output. This means we do not use graph_x_max,graph_y_max for the gain, but rather MAX_VOLTS.
         x_bias = -MAIN_GRAPH_CANVAS_SIZE[0]/2
         y_bias = -MAIN_GRAPH_CANVAS_SIZE[1]/2
-        x_gain =  (2 * graph_x_max)/MAIN_GRAPH_CANVAS_SIZE[0]
-        y_gain = -(2 * graph_y_max)/MAIN_GRAPH_CANVAS_SIZE[1]
+        x_gain =  (2 * MAX_VOLTS)/MAIN_GRAPH_CANVAS_SIZE[0]
+        y_gain = -(2 * MAX_VOLTS)/MAIN_GRAPH_CANVAS_SIZE[1]
         self.mouse_to_volts = CalibrationParameters(x_bias=x_bias, y_bias=y_bias, x_gain=x_gain, y_gain=y_gain, rotation=0)
 
         dd_col = sg.Column([
@@ -516,8 +519,9 @@ class GUI:
                 if self.state.is_mouse_mode:
                     e = self.graph.user_bind_event
                     self.state.mouse_mode_xy = self.mouse_to_volts.transform(Point(e.x, e.y))
+                    logger.info(f"graph-mouse-motion {e.x},{e.y} -> {self.state.mouse_mode_xy.x}, {self.state.mouse_mode_xy.y}")
+
                 # print(e)
-                #logger.info(f"graph-mouse-motion {e.x},{e.y}")
 
             # Update output channels
             if event in ['left_x_channel', 'left_y_channel', 'right_x_channel', 'right_y_channel', 'pupil_x_channel', 'pupil_y_channel']:
