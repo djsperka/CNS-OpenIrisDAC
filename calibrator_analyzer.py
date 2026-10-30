@@ -373,7 +373,9 @@ class Calibrator(Thread):
     def dofit(self):
         # The items in the measurements dict are lists. Each list element
         # is a numpy ndarray with shape (2,) - this is the (x,y) of that crsig measurement. 
-        # The stim position is in the key, which is a tuple (stimx, stimy)
+        # The stim position is in the key, which is a tuple (stimx_degrees, stimy_degrees)
+        # This method attempts to fit the measurements to the stim positions. On success, 
+        # self._cal is set, and self._have_cal==True.
 
         target_xy_list=[]
         measured_xy_list = []
