@@ -186,6 +186,10 @@ class GUI:
                 color='grey90'
             else:
                 color='grey75'
+                # draw label
+                self.graph.draw_text(f"{int(x)}\u00b0", (x, -0.3))
+                self.graph.draw_text(f"{int(-x)}\u00b0", (-x, -0.3))
+
             self.graph.draw_line((x, graph_y_max), (x, -graph_y_max), color=color)
             self.graph.draw_line((-x, graph_y_max), (-x, -graph_y_max), color=color)
 
@@ -195,6 +199,9 @@ class GUI:
                 color='grey90'
             else:
                 color='grey75'
+                # draw label
+                self.graph.draw_text(f"{int(y)}\u00b0", (-0.3, y))
+                self.graph.draw_text(f"{int(-y)}\u00b0", (-0.3, -y))
             self.graph.draw_line((-graph_x_max, y), (graph_x_max, y), color=color)
             self.graph.draw_line((-graph_x_max, -y), (graph_x_max, -y), color=color)
 
@@ -519,7 +526,7 @@ class GUI:
                 if self.state.is_mouse_mode:
                     e = self.graph.user_bind_event
                     self.state.mouse_mode_xy = self.mouse_to_volts.transform(Point(e.x, e.y))
-                    logger.info(f"graph-mouse-motion {e.x},{e.y} -> {self.state.mouse_mode_xy.x}, {self.state.mouse_mode_xy.y}")
+                    # logger.info(f"graph-mouse-motion {e.x},{e.y} -> {self.state.mouse_mode_xy.x}, {self.state.mouse_mode_xy.y}")
 
                 # print(e)
 
