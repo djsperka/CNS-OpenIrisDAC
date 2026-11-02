@@ -14,6 +14,7 @@ import logging
 from enum import Enum
 import datetime
 import pickle
+from numpy_ringbuffer import RingBuffer
 
 logger = logging.getLogger("Calibrator")
 
@@ -67,6 +68,30 @@ class ButtonPressInfo:
     checked: bool
 
 
+@dataclass
+class CalibrationMeasurement:
+    """Mean values over the analysis window around a good button press. Each is shape (2,)."""
+    fixpt: np.ndarray
+    pupil: np.ndarray
+    cr: np.ndarray
+    p4: np.ndarray
+
+    @property
+    def crsig(self):
+        return self.cr - self.pupil
+
+    @property
+    def dpisig(self):
+        return self.cr - self.p4
+
+
+# One record per frame in the calibration ring buffer. 'frame' is the absolute frame counter,
+# 'button' is True only on the frame where a button press was accepted, 'fixpt' is the
+# fixation point position active on that frame.
+FRAME_DTYPE = np.dtype([('frame', np.int64), ('pupil', float, 2), ('cr', float, 2),
+                        ('p4', float, 2), ('button', bool), ('fixpt', float, 2)])
+
+
 
 class Calibrator(Thread):
 
@@ -89,19 +114,15 @@ class Calibrator(Thread):
 
     def initialize_calibration(self):
         self._fps = self.globalstate.capture_fps
-        self._max_frames = np.floor(self.globalstate.calibration_initial_size_sec * self._fps)
-        self._increase_step_frames = np.floor(self.globalstate.calibration_increase_step_sec * self._fps)
         self._nbefore = int(np.floor(self.globalstate.calibration_before_sec * self._fps))
         self._nafter = int(np.floor(self.globalstate.calibration_after_sec * self._fps))
         self._vmax = self.globalstate.calibration_vmax_px_per_sec/self._fps
 
-        # data arrays
-        self._pupil_xy=np.zeros((2,self._max_frames))
-        self._cr_xy=np.zeros((2,self._max_frames))
-        self._p4_xy=np.zeros((2,self._max_frames))
-        self._pupil_xy=np.zeros((2,self._max_frames))
-        self._pupil_xy=np.zeros((2,self._max_frames))
-        logger.info(f"Created data arrays with {self._max_frames} elements.")
+        # Ring buffer for frame data. A button press is analyzed on the first frame where
+        # ind+nafter < counter, so nbefore+nafter+1 frames are needed. Double it for slack.
+        self._rb_capacity = 2 * (self._nbefore + self._nafter + 1)
+        self._rb = RingBuffer(self._rb_capacity, dtype=FRAME_DTYPE)
+        logger.info(f"Created ring buffer with capacity {self._rb_capacity} frames.")
 
         # good measurements saved here
         self._meas = defaultdict(list)
@@ -129,13 +150,9 @@ class Calibrator(Thread):
         # clear calibration and data
         self._have_cal = False
 
-        # zero out data arrays
-        self._pupil_xy[:] = 0
-        self._cr_xy[:] = 0
-        self._p4_xy[:] = 0
-        self._pupil_xy[:] = 0
-        self._pupil_xy[:] = 0
-        logger.info(f"Cleared data arrays with {self._max_frames} elements.")
+        # empty the ring buffer
+        self._rb = RingBuffer(self._rb_capacity, dtype=FRAME_DTYPE)
+        logger.info(f"Cleared ring buffer with capacity {self._rb_capacity} frames.")
 
         # reset measurements
         self._meas = defaultdict(list)
@@ -196,9 +213,15 @@ class Calibrator(Thread):
         counter = 0
         try:
             with open(pathToUse, 'r') as f:
-                for line in f: 
-                    s=line.split(',')
-                    meas[(float(s[0]), float(s[1]))].append(np.array([float(s[2]), float(s[3])]))
+                for line in f:
+                    s=[float(v) for v in line.split(',')]
+                    fixpt = np.array([s[0], s[1]])
+                    if len(s) >= 8:
+                        m = CalibrationMeasurement(fixpt, np.array(s[2:4]), np.array(s[4:6]), np.array(s[6:8]))
+                    else:
+                        # legacy format: fx,fy,crsig_x,crsig_y. Keep crsig (cr-pupil) intact.
+                        m = CalibrationMeasurement(fixpt, np.zeros(2), np.array(s[2:4]), np.full(2, np.nan))
+                    meas[(s[0], s[1])].append(m)
                     counter = counter+1
         except Exception as e:
             print(e)
@@ -211,7 +234,7 @@ class Calibrator(Thread):
         with open(pathToUse, 'w') as f:
             for (key,pts) in meas.items():
                 for p in pts:
-                    f.write(f"{key[0]:f},{key[1]:f},{p[0]:f},{p[1]:f}\n")
+                    f.write(f"{key[0]:f},{key[1]:f},{p.pupil[0]:f},{p.pupil[1]:f},{p.cr[0]:f},{p.cr[1]:f},{p.p4[0]:f},{p.p4[1]:f}\n")
 
     @property
     def measurements(self):
@@ -228,30 +251,30 @@ class Calibrator(Thread):
     def step(self, ed: EyesData):
         data_ok = True
 
-        # I'm not sure what constitutes bad pupil data. 
+        # I'm not sure what constitutes bad pupil data.
         # assume that x should be in [0,720] and y in [0,450]
         # CR data is bad if x or y is set to -100.
         # P4 data is bad if the x value is the max (720) plus 100 (=820), or the y value is -100.
         if ed.left.pupil.x < 0 or ed.left.pupil.x > 720 or ed.left.pupil.y < 0 or ed.left.pupil.y > 450:
-            self._pupil_xy[:, self._counter] = np.nan
+            pupil = (np.nan, np.nan)
             data_ok = False
         else:
-            self._pupil_xy[0, self._counter] = ed.left.pupil.x
-            self._pupil_xy[1, self._counter] = ed.left.pupil.y
+            pupil = (ed.left.pupil.x, ed.left.pupil.y)
 
         if ed.left.cr.x == -100 or ed.left.cr.y == -100:
-            self._cr_xy[:, self._counter] = np.nan
+            cr = (np.nan, np.nan)
             data_ok = False
         else:
-            self._cr_xy[0, self._counter] = ed.left.cr.x
-            self._cr_xy[1, self._counter] = ed.left.cr.y
+            cr = (ed.left.cr.x, ed.left.cr.y)
 
         if ed.left.p4.x == 820 or ed.left.p4.y == -100:
-            self._p4_xy[:, self._counter] = np.nan
+            p4 = (np.nan, np.nan)
             data_ok = False
         else:
-            self._p4_xy[0, self._counter] = ed.left.p4.x
-            self._p4_xy[1, self._counter] = ed.left.p4.y
+            p4 = (ed.left.p4.x, ed.left.p4.y)
+
+        fixpt = (ed.extra.doubles[7], ed.extra.doubles[8])
+        button_accepted = False
 
         button_is_pressed = ed.extra.ints[8] & 0x1
         framesig_present = ed.extra.ints[0] & 0x1
@@ -283,8 +306,9 @@ class Calibrator(Thread):
         # out bad data.
         # 
         # Updated to check value of calibration_fixation_on, which approximates the time when the fixpt is on screen. 
-        # If button is pressed when a fixpt is NOT on, we will ignore it. 
-        # TODO: Make sure we only accept one button per fixpt!
+        # If button is pressed when a fixpt is NOT on, we will ignore it.
+        # Only one button press is accepted per fixpt (calibration_fixation_button_accepted is reset
+        # when a new fixpt is presented).
 
         if self._button_up:
             if button_is_pressed:
@@ -292,9 +316,10 @@ class Calibrator(Thread):
                 with in_cal_lock:
                     if self.globalstate.calibration_fixation_on:
                         if not self.globalstate.calibration_fixation_button_accepted:
-                            self._button_list.append(ButtonPressInfo(self.counter, ed.extra.doubles[7], ed.extra.doubles[8], self._framesig_on_at, False))
+                            self._button_list.append(ButtonPressInfo(self.counter, fixpt[0], fixpt[1], self._framesig_on_at, False))
                             self.globalstate.calibration_fixation_button_accepted = True    # only one button per fixpt
-                            logger.info(f"Button at {self.counter} x={ed.extra.doubles[7]}, y={ed.extra.doubles[8]}")
+                            button_accepted = True
+                            logger.info(f"Button at {self.counter} x={fixpt[0]}, y={fixpt[1]}")
                         else:
                             logger.info("Button already pressed for this fixation point. Ignoring.")
                     else:
@@ -303,28 +328,41 @@ class Calibrator(Thread):
         else:
             if not button_is_pressed:
                 self._button_up = True
-    
-        self._counter += 1        
+
+        self._rb.append((self._counter, pupil, cr, p4, button_accepted, fixpt))
+        self._counter += 1
         self._button_ana()
         return self._counter
 
-    def get_crsig(self, start:None|int=None, stop:None|int=None, step:None|int=None):
-        """Get CR signal (cr-pupil) for the slice described by slice(start,stop,step). 
+    def _get_window(self, start:int, stop:int):
+        """Get frames [start, stop) (absolute frame numbers) from the ring buffer, oldest first.
 
-        Args:
-            start (None | int, optional): see slice(). Defaults to None.
-            stop (None | int, optional): see slice(). Defaults to None.
-            step (None | int, optional): see slice(). Defaults to None.
+        Returns:
+            structured ndarray (FRAME_DTYPE) of length stop-start, or None if the frames are not
+            all in the buffer.
+        """
+        # absolute frame number of the oldest frame in the buffer (logical index 0)
+        oldest = self._counter - len(self._rb)
+        if start < oldest or stop > self._counter or stop <= start:
+            logger.warning(f"Frames [{start},{stop}) not in ring buffer (holds [{oldest},{self._counter}))")
+            return None
+        # RingBuffer maps non-negative logical indices to the underlying storage, so these come out in order
+        w = self._rb[np.arange(start - oldest, stop - oldest)]
+        if w['frame'][0] != start or not np.all(np.diff(w['frame']) == 1):
+            logger.warning(f"Frames extracted from ring buffer are out of order for [{start},{stop})")
+            return None
+        return w
+
+    def get_crsig(self, w):
+        """Get CR signal (cr-pupil) for a window from _get_window().
 
         Returns:
             ndarray: row 0/1 is x/y value. shape=(2,M)
         """
-        s=slice(start,stop,step)
-        return self._cr_xy[:,s]-self._pupil_xy[:,s]
+        return (w['cr'] - w['pupil']).T
 
-    def get_dpisig(self, start:None|int=None, stop:None|int=None, step:None|int=None):
-        s=slice(start, stop, step)
-        return self._cr_xy[:,s]-self._p4_xy[:,s]
+    def get_dpisig(self, w):
+        return (w['cr'] - w['p4']).T
 
     def _check_velocity(self, xy, vmax):
         """Check that velocity (in x and y separately) is less than vmax in the range defined by ind, nbefore, and nafter.
@@ -346,10 +384,10 @@ class Calibrator(Thread):
             if not binf.checked:
                 if binf.vx < 900 and binf.vy < 900:
                     if binf.ind+self._nafter < self._counter:
-                        crsig = self.get_crsig(binf.ind-self._nbefore, binf.ind+self._nafter)
-                        # add a check for crsig being empty
-                        if crsig.size > 0 and self._check_velocity(crsig, self._vmax):
-                            m = crsig.mean(axis=1)
+                        w = self._get_window(binf.ind-self._nbefore, binf.ind+self._nafter)
+                        if w is not None and self._check_velocity(self.get_crsig(w), self._vmax):
+                            m = CalibrationMeasurement(np.array([binf.vx, binf.vy]),
+                                                       w['pupil'].mean(axis=0), w['cr'].mean(axis=0), w['p4'].mean(axis=0))
                             self._meas[(binf.vx,binf.vy)].append(m)
                         binf.checked = True
                 else:
@@ -357,9 +395,9 @@ class Calibrator(Thread):
 
     def dofit(self):
         # The items in the measurements dict are lists. Each list element
-        # is a numpy ndarray with shape (2,) - this is the (x,y) of that crsig measurement. 
+        # is a CalibrationMeasurement - its crsig is the (x,y) of that crsig measurement.
         # The stim position is in the key, which is a tuple (stimx_degrees, stimy_degrees)
-        # This method attempts to fit the measurements to the stim positions. On success, 
+        # This method attempts to fit the measurements to the stim positions. On success,
         # self._cal is set, and self._have_cal==True.
 
         target_xy_list=[]
@@ -368,12 +406,12 @@ class Calibrator(Thread):
         for i, (key,pts) in enumerate(self._meas.items()):
             if key == (0,0):
                 # get the mean of these - this is the bias
-                bias = np.stack(pts).mean(axis=0)
+                bias = np.stack([p.crsig for p in pts]).mean(axis=0)
                 logger.info(f"Used {len(pts)} to get bias: {bias}")
             else:
-                for xy in pts:
+                for p in pts:
                     target_xy_list.append(key)
-                    measured_xy_list.append(xy)
+                    measured_xy_list.append(p.crsig)
 
         # Multiply the target xy by the volts per degree in x and y. Then pass the target _volts_ as a 1D array 
         # so all x values are first, then the y values. Results from the wrapper func should be ravel()d like this. 

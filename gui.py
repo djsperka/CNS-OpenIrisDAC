@@ -236,12 +236,12 @@ class GUI:
         for i, (key,pts) in enumerate(measurements.items()):
             for p in pts:
                 # draw raw point
-                raw_graph.draw_point((p[0], p[1]), color=self.colorlist[i], size=4)
+                raw_graph.draw_point((p.crsig[0], p.crsig[1]), color=self.colorlist[i], size=4)
         # highlight should be a list of i,j tuples [(i0,j0),(i1,j1),...]
         for (key,ij) in highlight:
             pts = measurements[key]
             p=pts[ij[1]]
-            raw_graph.draw_point((p[0], p[1]), color=self.colorlist[ij[0]], size=8)
+            raw_graph.draw_point((p.crsig[0], p.crsig[1]), color=self.colorlist[ij[0]], size=8)
 
 
     def update_cal_graph(self, cal_graph, measurements, cal):
@@ -262,7 +262,7 @@ class GUI:
 
         for i, (key,pts) in enumerate(measurements.items()):
             for p in pts:
-                pp = cal.transform(Point(p[0], p[1]))
+                pp = cal.transform(Point(p.crsig[0], p.crsig[1]))
                 cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
 
     def update_calibration_graphs(self):
@@ -654,7 +654,7 @@ class GUI:
             dsqmin=999999999
             for i, (key,pts) in enumerate(meas.items()):
                 for j,p in enumerate(pts):
-                    dsq = (xms-p[0])**2+(yms-p[1])**2
+                    dsq = (xms-p.crsig[0])**2+(yms-p.crsig[1])**2
                     if dsq < dsqmin:
                         keyclose=key
                         iclose=i
