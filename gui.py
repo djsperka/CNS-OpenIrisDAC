@@ -10,6 +10,7 @@ import PySimpleGUI as sg
 from platformdirs import PlatformDirs
 from pathlib import Path
 import copy
+import numpy as np
 import argparse
 import time
 from dac_common import AnalogOutput, AnalogOutputPair
@@ -227,7 +228,8 @@ class GUI:
         # self.graph.draw_point((4.3, -4.7), size=.30, color='green' if int0 else 'red')
         # self.graph.draw_point((4.7, -4.7), size=.30, color='green' if int1 else 'red')
 
-    def update_raw_graph(self, raw_graph, measurements, highlight=[]):
+    def update_raw_graph(self, raw_graph, measurements, highlight=[], sig='crsig'):
+        """Draw raw measurements. sig is the CalibrationMeasurement signal to draw ('crsig' or 'dpisig')."""
         raw_graph.erase()
         raw_graph.draw_line((-100,-100), (-100,100))
         raw_graph.draw_line((-100,100),(100,100))
@@ -236,15 +238,18 @@ class GUI:
         for i, (key,pts) in enumerate(measurements.items()):
             for p in pts:
                 # draw raw point
-                raw_graph.draw_point((p.crsig[0], p.crsig[1]), color=self.colorlist[i], size=4)
+                s = getattr(p, sig)
+                if not np.any(np.isnan(s)):
+                    raw_graph.draw_point((s[0], s[1]), color=self.colorlist[i % len(self.colorlist)], size=4)
         # highlight should be a list of i,j tuples [(i0,j0),(i1,j1),...]
         for (key,ij) in highlight:
             pts = measurements[key]
-            p=pts[ij[1]]
-            raw_graph.draw_point((p.crsig[0], p.crsig[1]), color=self.colorlist[ij[0]], size=8)
+            s = getattr(pts[ij[1]], sig)
+            if not np.any(np.isnan(s)):
+                raw_graph.draw_point((s[0], s[1]), color=self.colorlist[ij[0] % len(self.colorlist)], size=8)
 
 
-    def update_cal_graph(self, cal_graph, measurements, cal):
+    def update_cal_graph(self, cal_graph, measurements, cal, sig='crsig'):
         cal_graph.erase()
         cal_graph.draw_line((-5,0), (5,0))
         cal_graph.draw_line((0,-5), (0,5))
@@ -262,8 +267,11 @@ class GUI:
 
         for i, (key,pts) in enumerate(measurements.items()):
             for p in pts:
-                pp = cal.transform(Point(p.crsig[0], p.crsig[1]))
-                cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i], size=0.2)
+                s = getattr(p, sig)
+                if np.any(np.isnan(s)):
+                    continue
+                pp = cal.transform(Point(s[0], s[1]))
+                cal_graph.draw_point((pp.x, pp.y), color=self.colorlist[i % len(self.colorlist)], size=0.2)
 
     def update_calibration_graphs(self):
         """Called on timer to update calibration graphs.
@@ -272,8 +280,11 @@ class GUI:
         if self.calibrator is not None:
             m = self.calibrator.measurements.copy()     # make copy in case something is added during write
             b, tempCal = self.calibrator.get_cal()
-            self.update_raw_graph(self.raw_graph, m)
-            self.update_cal_graph(self.cal_graph, m, tempCal)
+            bd, tempDpiCal = self.calibrator.get_dpi_cal()
+            self.update_raw_graph(self.raw_graph, m, sig='crsig')
+            self.update_cal_graph(self.cal_graph, m, tempCal, sig='crsig')
+            self.update_raw_graph(self.raw_dpi_graph, m, sig='dpisig')
+            self.update_cal_graph(self.cal_dpi_graph, m, tempDpiCal, sig='dpisig')
             # self.all_frames_in_text.update(self.state.frames_in)
             # self.calibration_frames_in_text.update(self.state.calibration_frames_in)
             # self.calibration_frames_out_text.update(self.state.calibration_frames_out)
@@ -423,16 +434,21 @@ class GUI:
 
         # tab for calibration plots
 
-        self.raw_graph = sg.Graph(canvas_size=RAW_GRAPH_CANVAS_SIZE, graph_bottom_left=RAW_GRAPH_BOTTOM_LEFT, graph_top_right=RAW_GRAPH_TOP_RIGHT, background_color='white', key='graph')
-        self.cal_graph = sg.Graph(canvas_size=CAL_GRAPH_CANVAS_SIZE, graph_bottom_left=CAL_GRAPH_BOTTOM_LEFT, graph_top_right=CAL_GRAPH_TOP_RIGHT, background_color='white', key='graph')
-        graph_column = sg.Column([[self.raw_graph],[self.cal_graph]], element_justification='center')
+        header_font = ('Helvetica', 14, 'bold')
+        self.raw_graph = sg.Graph(canvas_size=RAW_GRAPH_CANVAS_SIZE, graph_bottom_left=RAW_GRAPH_BOTTOM_LEFT, graph_top_right=RAW_GRAPH_TOP_RIGHT, background_color='white', key='cal-raw-cr')
+        self.cal_graph = sg.Graph(canvas_size=CAL_GRAPH_CANVAS_SIZE, graph_bottom_left=CAL_GRAPH_BOTTOM_LEFT, graph_top_right=CAL_GRAPH_TOP_RIGHT, background_color='white', key='cal-fit-cr')
+        cr_column = sg.Column([[sg.Text('CR', font=header_font)],[self.raw_graph],[self.cal_graph]], element_justification='center')
+
+        self.raw_dpi_graph = sg.Graph(canvas_size=RAW_GRAPH_CANVAS_SIZE, graph_bottom_left=RAW_GRAPH_BOTTOM_LEFT, graph_top_right=RAW_GRAPH_TOP_RIGHT, background_color='white', key='cal-raw-dpi')
+        self.cal_dpi_graph = sg.Graph(canvas_size=CAL_GRAPH_CANVAS_SIZE, graph_bottom_left=CAL_GRAPH_BOTTOM_LEFT, graph_top_right=CAL_GRAPH_TOP_RIGHT, background_color='white', key='cal-fit-dpi')
+        dpi_column = sg.Column([[sg.Text('DPI', font=header_font)],[self.raw_dpi_graph],[self.cal_dpi_graph]], element_justification='center')
 
         # second column for other stuff.
         other_column = sg.Column([[sg.Button('Try to fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Edit points', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Accept fit', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
                                   [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')]])
-        calibration_layout = [[graph_column,other_column]]        
+        calibration_layout = [[cr_column,dpi_column,other_column]]
         ct = sg.Tab('Calibration', calibration_layout)
 
         tabs = sg.TabGroup([[lt,ct,st]], key='tabs', expand_y=True)
@@ -593,7 +609,12 @@ class GUI:
                     self.update_calibration_graphs()
 
                 if event == 'cal-accept':
-                    b, cal = self.calibrator.get_cal()
+                    # accept the fit that matches the method in use for the left eye
+                    if self.state.left_method == 'dpi':
+                        b, cal = self.calibrator.get_dpi_cal()
+                    else:
+                        b, cal = self.calibrator.get_cal()
+                    logger.info(f"Accepting {self.state.left_method} fit: valid={b} {cal}")
                     if b:
                         with cal_lock:
                             self.state.left_cal.x_bias = cal.x_bias

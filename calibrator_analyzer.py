@@ -12,8 +12,6 @@ from queue import Queue, Empty
 from globalstate import GlobalState
 import logging
 from enum import Enum
-import datetime
-import pickle
 from numpy_ringbuffer import RingBuffer
 
 logger = logging.getLogger("Calibrator")
@@ -53,8 +51,15 @@ class TWrapperClass:
         Returns:
             _type_: _description_
         """
-        #logger.info(f"wrapper.func: xydata shape is {np.shape(xydata)}")
-        pdata = np.apply_along_axis(self.do_transform, 0, xydata, x_gain, y_gain, degrees)
+        # Same math as CalibrationParameters.transform(), but vectorized and in float64. Point stores
+        # float32, which swamps curve_fit's finite-difference Jacobian steps and stops the fit early.
+        xy = np.asarray(xydata, dtype=np.float64)
+        bias = np.array([[self.cal.x_bias], [self.cal.y_bias]], dtype=np.float64)
+        gain = np.array([[x_gain], [y_gain]], dtype=np.float64)
+        a = degrees * np.pi / 180
+        R = np.array([[np.cos(a), np.sin(a)], [-np.sin(a), np.cos(a)]])
+        # Point.rotate() computes row @ R; for column vectors that is R.T @ col
+        pdata = R.T @ ((xy + bias) * gain)
         return pdata.ravel()
 
 
@@ -128,7 +133,9 @@ class Calibrator(Thread):
         self._meas = defaultdict(list)
         self._cal = CalibrationParameters(0,0,1,1,0)
         self._have_cal = False
-        
+        self._dpi_cal = CalibrationParameters(0,0,1,1,0)
+        self._have_dpi_cal = False
+
         # these are for state management
         self._counter = 0
         self._button_up = True
@@ -158,7 +165,9 @@ class Calibrator(Thread):
         self._meas = defaultdict(list)
         self._cal = CalibrationParameters(0,0,1,1,0)
         self._have_cal = False
-        
+        self._dpi_cal = CalibrationParameters(0,0,1,1,0)
+        self._have_dpi_cal = False
+
         # reset state
         self._counter = 0
         self._button_up = True
@@ -394,31 +403,51 @@ class Calibrator(Thread):
                     binf.checked = True # weird initialization values here
 
     def dofit(self):
+        # Fit both the CR signal (cr-pupil) and the DPI signal (cr-p4). On success,
+        # self._cal/self._have_cal (CR) and self._dpi_cal/self._have_dpi_cal (DPI) are set.
+        # A failure of one fit does not affect the other.
+        cal = self._fit_signal('crsig')
+        if cal is not None:
+            self._cal = cal
+            self._have_cal = True
+        cal = self._fit_signal('dpisig')
+        if cal is not None:
+            self._dpi_cal = cal
+            self._have_dpi_cal = True
+
+    def _fit_signal(self, sig: str):
         # The items in the measurements dict are lists. Each list element
-        # is a CalibrationMeasurement - its crsig is the (x,y) of that crsig measurement.
+        # is a CalibrationMeasurement - getattr(p, sig) is the (x,y) of that signal ('crsig' or 'dpisig').
         # The stim position is in the key, which is a tuple (stimx_degrees, stimy_degrees)
-        # This method attempts to fit the measurements to the stim positions. On success,
-        # self._cal is set, and self._have_cal==True.
+        # This method attempts to fit the measurements to the stim positions. Returns the
+        # fitted CalibrationParameters, or None if the fit could not be done.
 
         target_xy_list=[]
         measured_xy_list = []
         bias = (0,0)
         for i, (key,pts) in enumerate(self._meas.items()):
+            vals = [getattr(p, sig) for p in pts]
+            vals = [v for v in vals if not np.any(np.isnan(v))]
             if key == (0,0):
                 # get the mean of these - this is the bias
-                bias = np.stack([p.crsig for p in pts]).mean(axis=0)
-                logger.info(f"Used {len(pts)} to get bias: {bias}")
+                if vals:
+                    bias = np.stack(vals).mean(axis=0)
+                    logger.info(f"{sig}: used {len(vals)} to get bias: {bias}")
             else:
-                for p in pts:
+                for v in vals:
                     target_xy_list.append(key)
-                    measured_xy_list.append(p.crsig)
+                    measured_xy_list.append(v)
 
-        # Multiply the target xy by the volts per degree in x and y. Then pass the target _volts_ as a 1D array 
-        # so all x values are first, then the y values. Results from the wrapper func should be ravel()d like this. 
-        # pass measured values the same, but don't ravel(). That is, row 0 is x, row 1 is y. This gets passed to the 
-        # func without any modification. 
+        if not target_xy_list:
+            logger.warning(f"{sig}: no usable measurements, cannot fit.")
+            return None
 
-        logger.info(f"Fit will use {len(target_xy_list)} measurements")
+        # Multiply the target xy by the volts per degree in x and y. Then pass the target _volts_ as a 1D array
+        # so all x values are first, then the y values. Results from the wrapper func should be ravel()d like this.
+        # pass measured values the same, but don't ravel(). That is, row 0 is x, row 1 is y. This gets passed to the
+        # func without any modification.
+
+        logger.info(f"{sig}: fit will use {len(target_xy_list)} measurements")
         target_xy_for_fit = (np.stack(target_xy_list)*(self.globalstate.calibration_vpdx,self.globalstate.calibration_vpdy)).T.ravel()
         measured_xy_for_fit = np.stack(measured_xy_list).T
 
@@ -434,11 +463,18 @@ class Calibrator(Thread):
 
 
         wrapper = TWrapperClass(-bias[0], -bias[1])
-        popt, pcov = curve_fit(wrapper.func, measured_xy_for_fit, target_xy_for_fit, p0, bounds=(low_limits, hi_limits))
+        try:
+            popt, pcov = curve_fit(wrapper.func, measured_xy_for_fit, target_xy_for_fit, p0, bounds=(low_limits, hi_limits))
+        except Exception as e:
+            logger.error(f"{sig}: fit failed: {e}")
+            return None
 
-        self._cal = CalibrationParameters(-bias[0], -bias[1], popt[0], popt[1], popt[2])
-        self._have_cal = True
-        return
+        cal = CalibrationParameters(-bias[0], -bias[1], popt[0], popt[1], popt[2])
+        logger.info(f"{sig}: fit result {cal}")
+        return cal
+
+    def get_dpi_cal(self):
+        return self._have_dpi_cal, self._dpi_cal
 
 def event_printer(event):
     """Helper function for exploring events.
