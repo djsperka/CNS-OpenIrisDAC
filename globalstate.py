@@ -60,7 +60,6 @@ class GlobalState:
         self.calibrating = False
         self.loading = False
         self.loading_filename = None
-        self.calibration_plot_invalidated = True    # set this to True with calibration plots need updating
         self.calibration_diobits = int(0)
         self.calibration_fixation_x = 99999.9
         self.calibration_fixation_y = 99999.9

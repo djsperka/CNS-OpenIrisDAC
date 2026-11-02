@@ -105,7 +105,6 @@ class Calibrator(Thread):
 
         # good measurements saved here
         self._meas = defaultdict(list)
-        self._invalidated = True
         self._cal = CalibrationParameters(0,0,1,1,0)
         self._have_cal = False
         
@@ -129,7 +128,6 @@ class Calibrator(Thread):
 
         # clear calibration and data
         self._have_cal = False
-        self._invalidated = True   # re-draw without the resultant points
 
         # zero out data arrays
         self._pupil_xy[:] = 0
@@ -141,7 +139,6 @@ class Calibrator(Thread):
 
         # reset measurements
         self._meas = defaultdict(list)
-        self._invalidated = True
         self._cal = CalibrationParameters(0,0,1,1,0)
         self._have_cal = False
         
@@ -164,7 +161,6 @@ class Calibrator(Thread):
             if self._state == self.States.INITIALIZE:
                 logger.info("entering INITIALIZE")
                 self.initialize_calibration()
-                self._invalidated = True
                 self._state = self.States.IDLE
             elif self._state == self.States.IDLE:
                 # wait for globalstate to say we're calibrating. 
@@ -209,7 +205,6 @@ class Calibrator(Thread):
             print('Error loading calibration measurements file.')
         logger.info(f"Loaded {counter} lines from {pathToUse}")
         self._meas = meas
-        self._invalidated = True
         return counter
 
     def save_measurements(self, pathToUse, meas):
@@ -225,15 +220,6 @@ class Calibrator(Thread):
     @measurements.setter
     def measurements(self, m:defaultdict):
         self._meas = m
-        self._invalidated = True
-
-    @property
-    def invalidated(self):
-        return self._invalidated
-
-    @invalidated.setter
-    def invalidated(self, v:bool):
-        self._invalidated = v
 
     @property
     def counter(self):
@@ -365,7 +351,6 @@ class Calibrator(Thread):
                         if crsig.size > 0 and self._check_velocity(crsig, self._vmax):
                             m = crsig.mean(axis=1)
                             self._meas[(binf.vx,binf.vy)].append(m)
-                            self._invalidated = True
                         binf.checked = True
                 else:
                     binf.checked = True # weird initialization values here
@@ -415,7 +400,6 @@ class Calibrator(Thread):
 
         self._cal = CalibrationParameters(-bias[0], -bias[1], popt[0], popt[1], popt[2])
         self._have_cal = True
-        self._invalidated = True
         return
 
 def event_printer(event):
