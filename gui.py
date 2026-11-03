@@ -130,6 +130,8 @@ class GUI:
         self.lr.sync_state(self.window)
         self.plb.sync_state(self.window)
         self.plg.sync_state(self.window)
+        for f in self.dpi_fields:
+            f.sync_state(self.window)
 
     def update_output_channels(self):
         """Event callback for any of the analog output channel combo boxes. Only the left eye outputs are configured here! The state variables
@@ -139,11 +141,16 @@ class GUI:
         self.state.left_x_channel = self.window['left_x_channel'].get()
         self.state.left_y_channel = self.window['left_y_channel'].get()
         self.state.pupil_x_channel = self.window['pupil_x_channel'].get()
+        self.state.left_dpi_x_channel = self.window['left_dpi_x_channel'].get()
+        self.state.left_dpi_y_channel = self.window['left_dpi_y_channel'].get()
         left_x = self.state.output_dict[self.window['left_x_channel'].get()] if self.window['left_x_channel'].get() != 'None' else AnalogOutput()
         left_y = self.state.output_dict[self.window['left_y_channel'].get()] if self.window['left_y_channel'].get() != 'None' else AnalogOutput()
         left_pupil = self.state.output_dict[self.window['pupil_x_channel'].get()] if self.window['pupil_x_channel'].get() != 'None' else AnalogOutput()
         right_pupil = AnalogOutput()
+        left_dpi_x = self.state.output_dict[self.state.left_dpi_x_channel] if self.state.left_dpi_x_channel != 'None' else AnalogOutput()
+        left_dpi_y = self.state.output_dict[self.state.left_dpi_y_channel] if self.state.left_dpi_y_channel != 'None' else AnalogOutput()
         self.state.left_output = AnalogOutputPair(left_x, left_y)
+        self.state.left_dpi_output = AnalogOutputPair(left_dpi_x, left_dpi_y)
         self.state.pupil_output = AnalogOutputPair(left_pupil, right_pupil)
         
     def update_graph(self):
@@ -163,6 +170,8 @@ class GUI:
             right_y = self.state.right_output.v_out.y / self.state.calibration_vpdy
             left_x = self.state.left_output.v_out.x / self.state.calibration_vpdx
             left_y = self.state.left_output.v_out.y / self.state.calibration_vpdy
+            left_dpi_x = self.state.left_dpi_output.v_out.x / self.state.calibration_vpdx
+            left_dpi_y = self.state.left_dpi_output.v_out.y / self.state.calibration_vpdy
             pupil_x = self.state.pupil_output.v_out.x / self.state.calibration_vpdx
             pupil_y = self.state.pupil_output.v_out.y / self.state.calibration_vpdy
         else:
@@ -172,6 +181,8 @@ class GUI:
             right_y = self.state.right_output.v_out.y
             left_x = self.state.left_output.v_out.x
             left_y = self.state.left_output.v_out.y
+            left_dpi_x = self.state.left_dpi_output.v_out.x
+            left_dpi_y = self.state.left_dpi_output.v_out.y
             pupil_x = self.state.pupil_output.v_out.x
             pupil_y = self.state.pupil_output.v_out.y
 
@@ -213,6 +224,8 @@ class GUI:
         ry = clipy(right_y)
         lx = clipx(left_x) 
         ly = clipy(left_y)
+        ldx = clipx(left_dpi_x)
+        ldy = clipy(left_dpi_y)
         px = clipx(pupil_x) 
         py = clipy(pupil_y)
 
@@ -220,7 +233,10 @@ class GUI:
         if self.state.calibration_eye in ("Right", "Both"):
             self.graph.draw_point((rx, ry), size=.15, color='firebrick1')
         if self.state.calibration_eye in ("Left", "Both"):
-            self.graph.draw_point((lx, ly), size=.15, color='DodgerBlue')
+            if self.state.display_cr:
+                self.graph.draw_point((lx, ly), size=.15, color='DodgerBlue')
+            if self.state.display_dpi:
+                self.graph.draw_point((ldx, ldy), size=.15, color='MediumSeaGreen')
         self.graph.draw_point((px, py), size=.15, color='DarkGoldenrod1')
         
         # int0 = self.state.last_eyes_data.extra.ints[0] & 1
@@ -371,15 +387,45 @@ class GUI:
             slider_enabled=True, slider_minimum=-180, slider_maximum=180, slider_resolution=1
             )
          
-        method_layout = []
-        method_layout.append(sg.Column([[sg.Text('Method: ')]]))
-        method_layout.append(
-            sg.Column(
-                [
-                    [ sg.Radio('DPI (P1-P4)', 'left_method', key='left_dpi', default=self.state.left_method=='dpi', enable_events=True) ],
-                    [ sg.Radio('PCR (P1-Pupil)', 'left_method', key='left_pcr', default=self.state.left_method=='pcr', enable_events=True) ]
-                ]
-            ))
+        # DPI (P1-P4) calibration fields, bound to left_dpi
+        self.dbx = GUIField(
+            'X Bias', 'left_dpi_x_bias', field_size,
+            self.state.left_dpi, 'x_bias', gain_factor=self.bias_factor,
+            increment=.5, multiplicative=False,
+            slider_enabled=True, slider_minimum=b_min, slider_maximum=b_max, slider_resolution=b_res
+            )
+        self.dby = GUIField(
+            'Y Bias', 'left_dpi_y_bias', field_size,
+            self.state.left_dpi, 'y_bias', gain_factor=self.bias_factor,
+            increment=.5, multiplicative=False,
+            slider_enabled=True, slider_minimum=b_min, slider_maximum=b_max, slider_resolution=b_res
+            )
+        self.dgx = GUIField(
+            'X Gain', 'left_dpi_x_gain', field_size,
+            self.state.left_dpi, 'x_gain', gain_factor=self.gain_factor,
+            increment=0.05, multiplicative=True, flip_enabled=True,
+            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
+            )
+        self.dgy = GUIField(
+            'Y Gain', 'left_dpi_y_gain', field_size,
+            self.state.left_dpi, 'y_gain', gain_factor=self.gain_factor,
+            increment=0.05, multiplicative=True, flip_enabled=True,
+            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
+            )
+        self.dr = GUIField(
+            'Rotation', 'left_dpi_rotation', field_size,
+            self.state.left_dpi, 'rotation', gain_factor=1,
+            increment=1, multiplicative=False,
+            slider_enabled=True, slider_minimum=-180, slider_maximum=180, slider_resolution=1
+            )
+        self.dpi_fields = [self.dbx, self.dby, self.dgx, self.dgy, self.dr]
+
+        # which signals are drawn on the main graph. Both are always output.
+        display_layout = [
+            sg.Text('Display: '),
+            sg.Checkbox('CR (P1-Pupil)', key='display_cr', default=self.state.display_cr, enable_events=True),
+            sg.Checkbox('DPI (P1-P4)', key='display_dpi', default=self.state.display_dpi, enable_events=True)
+            ]
 
         # max degrees in x and y. Degrees are used for coordinates/plotting in the main graph. The canvas size is in pixels.
         graph_x_max = MAX_VOLTS / self.state.calibration_vpdx
@@ -391,6 +437,7 @@ class GUI:
         graph_col = sg.Column([
             [sg.Text('', key='error', size=(20,1), text_color='red')],
             [self.graph],
+            display_layout,
             [self.cbmouse]
             ])
 
@@ -402,7 +449,9 @@ class GUI:
         y_gain = -(2 * MAX_VOLTS)/MAIN_GRAPH_CANVAS_SIZE[1]
         self.mouse_to_volts = CalibrationParameters(x_bias=x_bias, y_bias=y_bias, x_gain=x_gain, y_gain=y_gain, rotation=0)
 
+        header_font = ('Helvetica', 14, 'bold')
         dd_col = sg.Column([
+            [sg.Text('CR', font=header_font)],
             [self.lbx.get_layout()],
             [self.lby.get_layout()],
             [self.lgx.get_layout()],
@@ -411,11 +460,17 @@ class GUI:
             [self.plb.get_layout()],
             [self.plg.get_layout()],
             [sg.VPush()],
-            [sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue')],
-            method_layout
+            [sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue')]
             ])
 
-        lt = sg.Tab('Left Eye', [[dd_col,graph_col]])
+        dpi_col = sg.Column(
+            [[sg.Text('DPI', font=header_font)]] +
+            [[f.get_layout()] for f in self.dpi_fields] +
+            [[sg.VPush()],
+             [sg.Button(' Zero ', key='left_dpi_zero', enable_events=True, button_color='MediumSeaGreen')]],
+            expand_y=True)
+
+        lt = sg.Tab('Left Eye', [[dd_col,dpi_col,graph_col]])
 
         self.output_list = list(self.state.output_dict.keys())
         self.output_list.insert(0, 'None')
@@ -423,12 +478,16 @@ class GUI:
             [sg.Text('Channels: ')],
 
             # find each output list key in self.state.output_dict.keys()
-            [sg.Text('Eye X: '), sg.Combo(self.output_list, default_value=self.state.left_x_channel if self.state.left_x_channel in self.output_list else 'None', 
+            [sg.Text('CR X: '), sg.Combo(self.output_list, default_value=self.state.left_x_channel if self.state.left_x_channel in self.output_list else 'None', 
                                            key='left_x_channel', enable_events=True)],
-            [sg.Text('Eye Y: '), sg.Combo(self.output_list, default_value=self.state.left_y_channel if self.state.left_y_channel in self.output_list else 'None', 
+            [sg.Text('CR Y: '), sg.Combo(self.output_list, default_value=self.state.left_y_channel if self.state.left_y_channel in self.output_list else 'None', 
                                             key='left_y_channel', enable_events=True)],
             [sg.Text('Pupil: '), sg.Combo(self.output_list, default_value=self.state.pupil_x_channel if self.state.pupil_x_channel in self.output_list else 'None', 
-                                            key='pupil_x_channel', enable_events=True)]
+                                            key='pupil_x_channel', enable_events=True)],
+            [sg.Text('DPI X: '), sg.Combo(self.output_list, default_value=self.state.left_dpi_x_channel if self.state.left_dpi_x_channel in self.output_list else 'None',
+                                            key='left_dpi_x_channel', enable_events=True)],
+            [sg.Text('DPI Y: '), sg.Combo(self.output_list, default_value=self.state.left_dpi_y_channel if self.state.left_dpi_y_channel in self.output_list else 'None',
+                                            key='left_dpi_y_channel', enable_events=True)]
         ]
         st = sg.Tab('Settings', settings_layout)
 
@@ -499,23 +558,10 @@ class GUI:
                 self.state.is_running = False
                 break
             
-            # Update left method
-            if event in ['left_dpi', 'left_pcr']:
-                if values['left_dpi']:
-                    self.state.left_method = 'dpi'
-                elif values['left_pcr']:
-                    self.state.left_method = 'pcr'
-                else:
-                    self.state.left_method = 'dpi'
-            
-            # Update right method
-            if event in ['right_dpi', 'right_pcr']:
-                if values['right_dpi']:
-                    self.state.right_method = 'dpi'
-                elif values['right_pcr']:
-                    self.state.right_method = 'pcr'
-                else:
-                    self.state.right_method = 'dpi'
+            # Update which signals are displayed on the main graph
+            if event in ['display_cr', 'display_dpi']:
+                self.state.display_cr = values['display_cr']
+                self.state.display_dpi = values['display_dpi']
 
             # Update states
             self.lbx.update(self.window, event, values)
@@ -525,6 +571,8 @@ class GUI:
             self.lr.update(self.window, event, values)
             self.plb.update(self.window, event, values)
             self.plg.update(self.window, event, values)
+            for f in self.dpi_fields:
+                f.update(self.window, event, values)
 
             # checkbox? 
             if event == "check-mouse-mode":
@@ -547,21 +595,28 @@ class GUI:
                 # print(e)
 
             # Update output channels
-            if event in ['left_x_channel', 'left_y_channel', 'right_x_channel', 'right_y_channel', 'pupil_x_channel', 'pupil_y_channel']:
+            if event in ['left_x_channel', 'left_y_channel', 'right_x_channel', 'right_y_channel', 'pupil_x_channel', 'pupil_y_channel',
+                         'left_dpi_x_channel', 'left_dpi_y_channel']:
                 self.update_output_channels()
 
-            # Zero left
+            # Zero left CR (P1-pupil)
             if event == 'left_zero':
-                last_left = self.state.last_eyes_data.left.cr - \
-                    (self.state.last_eyes_data.left.pupil if self.state.left_method == 'pcr' else self.state.last_eyes_data.left.p4)
-                print(last_left)
+                last_left = self.state.last_eyes_data.left.cr - self.state.last_eyes_data.left.pupil
                 self.state.left_cal.x_bias = -last_left.x
                 self.state.left_cal.y_bias = -last_left.y
-                print(self.state.left_cal.x_bias, self.state.left_cal.y_bias)
-                print(self.state.left_cal.transform(last_left))
+                logger.info(f"Zero CR: bias {self.state.left_cal.x_bias}, {self.state.left_cal.y_bias}")
                 self.lbx.sync_state(self.window)
                 self.lby.sync_state(self.window)
-            
+
+            # Zero left DPI (P1-P4)
+            if event == 'left_dpi_zero':
+                last_left = self.state.last_eyes_data.left.cr - self.state.last_eyes_data.left.p4
+                self.state.left_dpi.x_bias = -last_left.x
+                self.state.left_dpi.y_bias = -last_left.y
+                logger.info(f"Zero DPI: bias {self.state.left_dpi.x_bias}, {self.state.left_dpi.y_bias}")
+                self.dbx.sync_state(self.window)
+                self.dby.sync_state(self.window)
+
             
             # Zero right
             if event == 'right_zero':
@@ -609,21 +664,21 @@ class GUI:
                     self.update_calibration_graphs()
 
                 if event == 'cal-accept':
-                    # accept the fit that matches the method in use for the left eye
-                    if self.state.left_method == 'dpi':
-                        b, cal = self.calibrator.get_dpi_cal()
-                    else:
-                        b, cal = self.calibrator.get_cal()
-                    logger.info(f"Accepting {self.state.left_method} fit: valid={b} {cal}")
-                    if b:
-                        with cal_lock:
-                            self.state.left_cal.x_bias = cal.x_bias
-                            self.state.left_cal.y_bias = cal.y_bias
-                            self.state.left_cal.x_gain = cal.x_gain
-                            self.state.left_cal.y_gain = cal.y_gain
-                            self.state.left_cal.rotation = cal.rotation
+                    # accept each valid fit into its own calibration: CR -> left_cal, DPI -> left_dpi
+                    accepted = False
+                    for name, (b, cal), target in (('CR', self.calibrator.get_cal(), self.state.left_cal),
+                                                   ('DPI', self.calibrator.get_dpi_cal(), self.state.left_dpi)):
+                        if b:
+                            with cal_lock:
+                                target.x_bias = cal.x_bias
+                                target.y_bias = cal.y_bias
+                                target.x_gain = cal.x_gain
+                                target.y_gain = cal.y_gain
+                                target.rotation = cal.rotation
+                            logger.info(f"Accepted {name} fit: {cal}")
+                            accepted = True
+                    if accepted:
                         self.update_sliders()   # updates calibration values in gui. Output
-                        
                     else:
                         logger.error(f"Calibrator does not have a valid calibration.")
 
@@ -643,7 +698,7 @@ class GUI:
                 self.update_calibration_graphs()    # TEMP HACK
 
                 # Get eye data error, if any
-                error = self.state.last_eyes_data.get_error(left_p4=self.state.left_method=='dpi', right_p4=self.state.right_method=='dpi')
+                error = self.state.last_eyes_data.get_error(left_p4=self.state.display_dpi, right_p4=True)
                 if error:
                     self.window['error'].update(value = error, text_color='red')
                 else:

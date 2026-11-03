@@ -44,16 +44,19 @@ class DataPipeline:
             # The 'calibration_eye' value is taken from the settings file (see EyeTrackerSettings usage in gui.py).
             # If mouse mode is active and 'Both' eyes are tracked, both outputs are written as the mouse output.
             if self.state.calibration_eye in ("Left", "Both"):
+                # CR (P1-pupil) and DPI (P1-P4) are both computed and written to their own outputs.
                 if not self.state.is_mouse_mode:
-                    left_output = data.left.cr - (data.left.pupil if self.state.left_method == 'pcr' else data.left.p4)
-                    left_output = self.state.left_cal.transform(left_output)
+                    left_output = self.state.left_cal.transform(data.left.cr - data.left.pupil)
                     self.state.left_output.write(left_output)
+                    left_dpi_output = self.state.left_dpi.transform(data.left.cr - data.left.p4)
+                    self.state.left_dpi_output.write(left_dpi_output)
                 else:
                     self.state.left_output.write(self.state.mouse_mode_xy)
+                    self.state.left_dpi_output.write(self.state.mouse_mode_xy)
 
             if self.state.calibration_eye in ("Right", "Both"):            
                 if not self.state.is_mouse_mode:
-                    right_output = data.right.cr - (data.right.pupil if self.state.right_method == 'pcr' else data.right.p4)
+                    right_output = data.right.cr - data.right.p4
                     right_output = self.state.right_cal.transform(right_output)
                     self.state.right_output.write(right_output)
                 else:

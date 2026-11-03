@@ -38,9 +38,10 @@ class GlobalState:
         logger.info(f"Config file: {self.config_file}")
 
         # assign non-config stuff first. 
-        self.left_method = 'dpi'
-        self.right_method = 'dpi'
-        self.left_output = AnalogOutputPair()
+        self.display_cr = True      # main graph shows CR (P1-pupil) eye position
+        self.display_dpi = True     # main graph shows DPI (P1-P4) eye position
+        self.left_output = AnalogOutputPair()       # CR output
+        self.left_dpi_output = AnalogOutputPair()   # DPI output
         self.right_output = AnalogOutputPair()
         self.pupil_output = AnalogOutputPair()
 
@@ -93,6 +94,8 @@ class GlobalState:
         self.left_x_channel = 'USB-AO16-8E-ch0'
         self.left_y_channel = 'USB-AO16-8E-ch1'
         self.pupil_x_channel = 'USB-AO16-8E-ch5'
+        self.left_dpi_x_channel = 'None'
+        self.left_dpi_y_channel = 'None'
 
         # load calibration 
         self.load_config()
@@ -180,6 +183,11 @@ class GlobalState:
             self.pupil_x_channel = cfg['output']['pupil_x_channel']
         except NonExistentKey:
             pass
+        try:
+            self.left_dpi_x_channel = cfg['output']['left_dpi_x_channel']
+            self.left_dpi_y_channel = cfg['output']['left_dpi_y_channel']
+        except NonExistentKey:
+            pass
 
     def save_config(self):
 
@@ -202,6 +210,8 @@ class GlobalState:
         output.add('left_x_channel', self.left_x_channel)
         output.add('left_y_channel', self.left_y_channel)
         output.add('pupil_x_channel', self.pupil_x_channel)
+        output.add('left_dpi_x_channel', self.left_dpi_x_channel)
+        output.add('left_dpi_y_channel', self.left_dpi_y_channel)
         cfg.add('output', output)
 
         with self.config_file.open(mode='w') as fp:
