@@ -5,7 +5,7 @@ from calibrator_comm import CalibratorComm
 from calibrator_analyzer import Calibrator
 from data_pipeline import DataPipeline
 from eye_tracker_settings import EyeTrackerSettings
-from generator import OpenIrisClientGenerator, FakeOpenIrisClientGenerator
+from generator import OpenIrisClientGenerator, FakeEyeDataGenerator
 import PySimpleGUI as sg
 from platformdirs import PlatformDirs
 from pathlib import Path
@@ -828,6 +828,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", help="File to write output to", type=str, default='')
     parser.add_argument("--fake", help="Use fake data generator instead of OpenIrisClient", action='store_true')
+    parser.add_argument("--fake-speed", help="Fake data: gaze speed along Lissajous path, deg/s", type=float, default=2.0)
+    parser.add_argument("--fake-cr-noise", help="Fake data: CR noise amplitude, deg", type=float, default=0.05)
+    parser.add_argument("--fake-dpi-noise", help="Fake data: DPI noise amplitude, deg", type=float, default=0.05)
     parser.add_argument("--address", help="Address of OpenIrisServer", default='localhost')
     parser.add_argument("--port", help="Port of OpenIrisServer", default=9003, type=int)
     parser.add_argument("--cal-port", help="Port of calibrator server", default=9292, type=int)
@@ -851,9 +854,12 @@ if __name__ == "__main__":
 
     gs = GlobalState()
 
-    # get fps and eye if not on command line
-    ets = EyeTrackerSettings(tracker_folder=args.tracker_folder)
-    (capture_fps, calibration_eye) = ets.get_frame_rate()
+    # get fps and eye if not on command line. With --fake there is no tracker, so use defaults.
+    if args.fake:
+        (capture_fps, calibration_eye) = (500, 'Left')
+    elif not (args.fps and args.eye):
+        ets = EyeTrackerSettings(tracker_folder=args.tracker_folder)
+        (capture_fps, calibration_eye) = ets.get_frame_rate()
     if not args.fps:
         gs.capture_fps = capture_fps
     else:
@@ -867,7 +873,8 @@ if __name__ == "__main__":
 
     # create a generator for the pipeline
     if args.fake:
-        generator = FakeOpenIrisClientGenerator(gs, args.address, args.port)
+        generator = FakeEyeDataGenerator(gs, speed_deg_per_sec=args.fake_speed,
+                                         cr_noise_deg=args.fake_cr_noise, dpi_noise_deg=args.fake_dpi_noise)
     else:  
         generator = OpenIrisClientGenerator(gs, args.address, args.port)
 
