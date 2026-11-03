@@ -10,7 +10,7 @@ import tomlkit
 from tomlkit.exceptions import NonExistentKey
 logger = logging.getLogger("GlobalState")
 
-DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac')
+DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac' if os.name == 'nt' else 'nodac')
 if DAC_BACKEND == 'dac':
     # default - use local dac.py which supports both AIOUSB and (sort of) NI modules
     from dac import discover_ao_modules
