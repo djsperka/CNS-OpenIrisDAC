@@ -356,6 +356,8 @@ class GUI:
         #     increment=0.05, multiplicative=True, flip_enabled=True,
         #     slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
         #     )
+
+        # CR (P1-P0) calibration fields, bound to left_cal
         self.lbx = GUIField(
             'X Bias', 'left_x_bias', field_size,
             self.state.left_cal, 'x_bias', gain_factor=self.bias_factor,
@@ -386,6 +388,7 @@ class GUI:
             increment=1, multiplicative=False,
             slider_enabled=True, slider_minimum=-180, slider_maximum=180, slider_resolution=1
             )
+        self.cr_fields = [self.lbx, self.lby, self.lgx, self.lgy, self.lr]
          
         # DPI (P1-P4) calibration fields, bound to left_dpi
         self.dbx = GUIField(
@@ -450,24 +453,24 @@ class GUI:
         self.mouse_to_volts = CalibrationParameters(x_bias=x_bias, y_bias=y_bias, x_gain=x_gain, y_gain=y_gain, rotation=0)
 
         header_font = ('Helvetica', 14, 'bold')
-        dd_col = sg.Column([
-            [sg.Text('CR', font=header_font)],
-            [self.lbx.get_layout()],
-            [self.lby.get_layout()],
-            [self.lgx.get_layout()],
-            [self.lgy.get_layout()],
-            [self.lr.get_layout()],
-            [self.plb.get_layout()],
-            [self.plg.get_layout()],
-            [sg.VPush()],
-            [sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue')]
-            ])
+        dd_col = sg.Column(
+            [[sg.Text('CR', font=header_font)]] +
+            [[f.get_layout()] for f in self.cr_fields] +
+            # [self.lbx.get_layout()],
+            # [self.lby.get_layout()],
+            # [self.lgx.get_layout()],
+            # [self.lgy.get_layout()],
+            # [self.lr.get_layout()],
+            [[sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue')]] +
+            [[sg.Text('PUPIL', font=header_font)]] +
+            [[self.plb.get_layout()]] +
+            [[self.plg.get_layout()]],
+            expand_y=True)
 
         dpi_col = sg.Column(
             [[sg.Text('DPI', font=header_font)]] +
             [[f.get_layout()] for f in self.dpi_fields] +
-            [[sg.VPush()],
-             [sg.Button(' Zero ', key='left_dpi_zero', enable_events=True, button_color='MediumSeaGreen')]],
+            [[sg.Button(' Zero ', key='left_dpi_zero', enable_events=True, button_color='MediumSeaGreen')]],
             expand_y=True)
 
         lt = sg.Tab('Left Eye', [[dd_col,dpi_col,graph_col]])
