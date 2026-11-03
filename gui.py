@@ -30,15 +30,19 @@ CAL_GRAPH_CANVAS_SIZE = (400, 400)
 CAL_GRAPH_BOTTOM_LEFT = (-5.1, -5.1)
 CAL_GRAPH_TOP_RIGHT = (5.1, 5.1)
 MAX_VOLTS = 5.0
+CR_COLOR = 'DeepSkyBlue'
+DPI_COLOR = 'MediumSeaGreen'
+PUPIL_COLOR = 'goldenrod1'
 
 
 class GUIField:
     def __init__(self, title:str, key:str, size:tuple, obj:object, field:str, gain_factor:float=1, increment:float=1, multiplicative:bool=False,
                 slider_enabled:bool=False, slider_minimum:float=-100, slider_maximum:float=100, slider_resolution:float=1, 
-                flip_enabled:bool=False):
+                flip_enabled:bool=False,color:str='default'):
         self.title = title
         self.key = key
         self.size = size
+        self.color = color
         self.object = obj
         self.field = field
         self.default_value = getattr(obj, field) / gain_factor
@@ -63,9 +67,9 @@ class GUIField:
         if self.flip_enabled:
             layout_left.append([sg.Checkbox('Flip', key=self.key+'_flip', default=self.flip_default, enable_events=True)])
         layout_right.append([
-                        sg.Button('<', key=self.key+'_dec', enable_events=True, s=(1, self.size[1])), 
+                        sg.Button('<', key=self.key+'_dec', enable_events=True, s=(1, self.size[1]), button_color=self.color), 
                         sg.InputText(default_text=self.default_value, s=(self.size[0], self.size[1]), key=self.key+'_input', enable_events=True),
-                        sg.Button('>', key=self.key+'_inc', enable_events=True, s=(1, self.size[1]))
+                        sg.Button('>', key=self.key+'_inc', enable_events=True, s=(1, self.size[1]), button_color=self.color)
                     ])
         if self.slider_enabled:
             layout_right.append([sg.Slider((self.slider_minimum, self.slider_maximum), orientation='h', s=(self.size[0]+3, 15), disable_number_display=True,
@@ -128,7 +132,7 @@ class GUI:
         self.lgx.sync_state(self.window)
         self.lgy.sync_state(self.window)
         self.lr.sync_state(self.window)
-        self.plb.sync_state(self.window)
+        #self.plb.sync_state(self.window)
         self.plg.sync_state(self.window)
         for f in self.dpi_fields:
             f.sync_state(self.window)
@@ -231,13 +235,14 @@ class GUI:
 
         # Only draw points for tracked eye(s)
         if self.state.calibration_eye in ("Right", "Both"):
-            self.graph.draw_point((rx, ry), size=.15, color='firebrick1')
+            self.graph.draw_point((rx, ry), size=.30, color='firebrick1')
         if self.state.calibration_eye in ("Left", "Both"):
             if self.state.display_cr:
-                self.graph.draw_point((lx, ly), size=.15, color='DodgerBlue')
+                self.graph.draw_point((lx, ly), size=.30, color=CR_COLOR)
             if self.state.display_dpi:
-                self.graph.draw_point((ldx, ldy), size=.15, color='MediumSeaGreen')
-        self.graph.draw_point((px, py), size=.15, color='DarkGoldenrod1')
+                self.graph.draw_point((ldx, ldy), size=.30, color=DPI_COLOR)
+        #self.graph.draw_point((px, py), size=.30, color='DarkGoldenrod1')
+        self.graph.draw_circle((0,0), px, line_color=PUPIL_COLOR)
         
         # int0 = self.state.last_eyes_data.extra.ints[0] & 1
         # int1 = self.state.last_eyes_data.extra.ints[1] & 1
@@ -319,6 +324,9 @@ class GUI:
         
         field_size = (10,1)
 
+        # set theme toSystemDefault
+        sg.theme('SystemDefault')
+
         # DJS - changing gain, bias factor to 1
         self.bias_factor = 1
         self.gain_factor = 1
@@ -334,11 +342,11 @@ class GUI:
         # move pupil tab first
         self.pupil_bias_factor = 1
         self.pupil_gain_factor = 1
-        self.plb = GUIField(
-            'LPupil Bias', 'left_pupil_bias', field_size, 
-            self.state.pupil_cal, 'x_bias', gain_factor=self.pupil_bias_factor, 
-            increment=1, multiplicative=False
-            )
+        # self.plb = GUIField(
+        #     'LPupil Bias', 'left_pupil_bias', field_size, 
+        #     self.state.pupil_cal, 'x_bias', gain_factor=self.pupil_bias_factor, 
+        #     increment=1, multiplicative=False, color=PUPIL_COLOR
+        #     )
         # self.prb = GUIField(
         #     'Right Pupil Bias', 'right_pupil_bias', field_size, 
         #     self.state.pupil_cal, 'y_bias', gain_factor=self.pupil_bias_factor,
@@ -347,8 +355,8 @@ class GUI:
         self.plg = GUIField(
             'LPupil Gain', 'left_pupil_gain', field_size, 
             self.state.pupil_cal, 'x_gain', gain_factor=self.pupil_gain_factor, 
-            increment=0.05, multiplicative=True, flip_enabled=True,
-            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
+            increment=0.05, multiplicative=True, flip_enabled=False,
+            slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res, color=PUPIL_COLOR
             )
         # self.prg = GUIField(
         #     'Right Pupil Gain', 'right_pupil_gain', field_size, 
@@ -361,31 +369,31 @@ class GUI:
         self.lbx = GUIField(
             'X Bias', 'left_x_bias', field_size,
             self.state.left_cal, 'x_bias', gain_factor=self.bias_factor,
-            increment=.5, multiplicative=False,
+            increment=.5, multiplicative=False, color=CR_COLOR,
             slider_enabled=True, slider_minimum=b_min, slider_maximum=b_max, slider_resolution=b_res
             )
         self.lby = GUIField(
             'Y Bias', 'left_y_bias', field_size,
             self.state.left_cal, 'y_bias', gain_factor=self.bias_factor,
-            increment=.5, multiplicative=False,
+            increment=.5, multiplicative=False, color=CR_COLOR,
             slider_enabled=True, slider_minimum=b_min, slider_maximum=b_max, slider_resolution=b_res
             )
         self.lgx = GUIField(
             'X Gain', 'left_x_gain', field_size,
             self.state.left_cal, 'x_gain', gain_factor=self.gain_factor,
-            increment=0.05, multiplicative=True, flip_enabled=True,
+            increment=0.05, multiplicative=True, flip_enabled=True, color=CR_COLOR,
             slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
             )
         self.lgy = GUIField(
             'Y Gain', 'left_y_gain', field_size,
             self.state.left_cal, 'y_gain', gain_factor=self.gain_factor,
-            increment=0.05, multiplicative=True, flip_enabled=True,
+            increment=0.05, multiplicative=True, flip_enabled=True, color=CR_COLOR,
             slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
             )
         self.lr = GUIField(
             'Rotation', 'left_rotation', field_size,
             self.state.left_cal, 'rotation', gain_factor=1,
-            increment=1, multiplicative=False,
+            increment=1, multiplicative=False, color=CR_COLOR,
             slider_enabled=True, slider_minimum=-180, slider_maximum=180, slider_resolution=1
             )
         self.cr_fields = [self.lbx, self.lby, self.lgx, self.lgy, self.lr]
@@ -394,31 +402,31 @@ class GUI:
         self.dbx = GUIField(
             'X Bias', 'left_dpi_x_bias', field_size,
             self.state.left_dpi, 'x_bias', gain_factor=self.bias_factor,
-            increment=.5, multiplicative=False,
+            increment=.5, multiplicative=False, color=DPI_COLOR,
             slider_enabled=True, slider_minimum=b_min, slider_maximum=b_max, slider_resolution=b_res
             )
         self.dby = GUIField(
             'Y Bias', 'left_dpi_y_bias', field_size,
             self.state.left_dpi, 'y_bias', gain_factor=self.bias_factor,
-            increment=.5, multiplicative=False,
+            increment=.5, multiplicative=False, color=DPI_COLOR,
             slider_enabled=True, slider_minimum=b_min, slider_maximum=b_max, slider_resolution=b_res
             )
         self.dgx = GUIField(
             'X Gain', 'left_dpi_x_gain', field_size,
             self.state.left_dpi, 'x_gain', gain_factor=self.gain_factor,
-            increment=0.05, multiplicative=True, flip_enabled=True,
+            increment=0.05, multiplicative=True, flip_enabled=True, color=DPI_COLOR,
             slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
             )
         self.dgy = GUIField(
             'Y Gain', 'left_dpi_y_gain', field_size,
             self.state.left_dpi, 'y_gain', gain_factor=self.gain_factor,
-            increment=0.05, multiplicative=True, flip_enabled=True,
+            increment=0.05, multiplicative=True, flip_enabled=True, color=DPI_COLOR,
             slider_enabled=True, slider_minimum=g_min, slider_maximum=g_max, slider_resolution=g_res
             )
         self.dr = GUIField(
             'Rotation', 'left_dpi_rotation', field_size,
             self.state.left_dpi, 'rotation', gain_factor=1,
-            increment=1, multiplicative=False,
+            increment=1, multiplicative=False, color=DPI_COLOR,
             slider_enabled=True, slider_minimum=-180, slider_maximum=180, slider_resolution=1
             )
         self.dpi_fields = [self.dbx, self.dby, self.dgx, self.dgy, self.dr]
@@ -454,18 +462,28 @@ class GUI:
 
         header_font = ('Helvetica', 14, 'bold')
         dd_col = sg.Column(
-            [[sg.Text('CR', font=header_font)]] +
-            [[f.get_layout()] for f in self.cr_fields] +
-            [[sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue')]] +
-            [[sg.Text('PUPIL', font=header_font)]] +
-            [[self.plb.get_layout()]] +
-            [[self.plg.get_layout()]],
+            [[sg.Frame('CR',
+                [[f.get_layout()] for f in self.cr_fields] +
+                [[sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DeepSkyBlue')]], font=header_font)]] +
+            [[sg.Frame('PUPIL', 
+#djs - no bias for pupil                [[self.plb.get_layout()]] +
+                [[self.plg.get_layout()]], font=header_font)]],
             expand_y=True)
 
+        # dd_col = sg.Column(
+        #     [[sg.Text('CR', font=header_font)]] +
+        #     [[f.get_layout()] for f in self.cr_fields] +
+        #     [[sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DeepSkyBlue')]] +
+        #     [[sg.Text('PUPIL', font=header_font)]] +
+        #     [[self.plb.get_layout()]] +
+        #     [[self.plg.get_layout()]],
+        #     expand_y=True)
+
+
         dpi_col = sg.Column(
-            [[sg.Text('DPI', font=header_font)]] +
-            [[f.get_layout()] for f in self.dpi_fields] +
-            [[sg.Button(' Zero ', key='left_dpi_zero', enable_events=True, button_color='MediumSeaGreen')]],
+            [[sg.Frame('DPI', 
+                [[f.get_layout()] for f in self.dpi_fields] +
+                [[sg.Button(' Zero ', key='left_dpi_zero', enable_events=True, button_color='MediumSeaGreen')]], font=header_font)]],
             expand_y=True)
 
         lt = sg.Tab('Left Eye', [[dd_col,dpi_col,graph_col]])
@@ -501,10 +519,10 @@ class GUI:
         dpi_column = sg.Column([[sg.Text('DPI', font=header_font)],[self.raw_dpi_graph],[self.cal_dpi_graph]], element_justification='center')
 
         # second column for other stuff.
-        other_column = sg.Column([[sg.Button('Try to fit', key='do-cal-fit', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Edit points', key='cal-edit-points', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Accept fit', key='cal-accept', enable_events=True, button_color='PaleVioletRed4')],
-                                  [sg.Button('Clear', key='cal-clear', enable_events=True, button_color='PaleVioletRed4')]])
+        other_column = sg.Column([[sg.Button('Try to fit', key='do-cal-fit', enable_events=True)],
+                                  [sg.Button('Edit points', key='cal-edit-points', enable_events=True)],
+                                  [sg.Button('Accept fit', key='cal-accept', enable_events=True)],
+                                  [sg.Button('Clear', key='cal-clear', enable_events=True)]])
         calibration_layout = [[cr_column,dpi_column,other_column]]
         ct = sg.Tab('Calibration', calibration_layout)
 
@@ -525,7 +543,7 @@ class GUI:
         # TODO: Remember configuration used last time this program ran.
         if not subject:
             subject = GlobalState.select_subject()
-        logger.info(f"Got subject {subject}")
+            logger.info(f"Selected subject {str(subject)}")
         if not subject:
             self.state.is_running = False
         else:
@@ -567,7 +585,7 @@ class GUI:
             self.lgx.update(self.window, event, values)
             self.lgy.update(self.window, event, values)
             self.lr.update(self.window, event, values)
-            self.plb.update(self.window, event, values)
+            #self.plb.update(self.window, event, values)
             self.plg.update(self.window, event, values)
             for f in self.dpi_fields:
                 f.update(self.window, event, values)
@@ -624,12 +642,6 @@ class GUI:
             if event == 'switch':
                 pass
 
-            # Save config
-            # if event == 'Save Config':
-            #     # Open a dialog to select a new file
-            #     save_dir = sg.popup_get_folder('Select save directory', default_path=self.state.save_dir)
-            #     self.state.save(Path(save_dir))
-
             # Load config
             if event == 'Load Config':
 
@@ -640,13 +652,6 @@ class GUI:
                     self.window.close()
                     self.window = self.make_window()
                     first = True
-
-                # # Open a folder picking dialog
-                # load_dir = sg.popup_get_folder('Select directory to load', default_path=self.state.save_dir)
-                # if load_dir:
-                #     self.state.load(Path(load_dir))
-                #     self.update_sliders()
-
 
             if self.calibrator is not None:
                 if event == 'cal-edit-points':
@@ -679,12 +684,6 @@ class GUI:
                         self.update_sliders()   # updates calibration values in gui. Output
                     else:
                         logger.error(f"Calibrator does not have a valid calibration.")
-
-                # if event == 'cal-load':
-                #     file_to_load = sg.popup_get_file('Select a cal-xy file to load', initial_folder=str(self.state.data_path), file_types=(('xy files', '.xy'),), no_window=True)
-                #     # Build a list of tuples for each file type the file dialog should display
-                #     if file_to_load:
-                #         self.calibrator.load_measurements(file_to_load)
 
                 # update calibration graphs
                 if event == 'calibration-graphs':
@@ -840,12 +839,6 @@ if __name__ == "__main__":
     parser.add_argument("--subject", help="Current subject (part of path to config file)", type=str, default=None)
     args = parser.parse_args()
 
-    # # if no subject was specified, open selection dialog
-    # if not args.subject:
-    #     subject = GlobalState.select_subject()    
-    #     print(f"Selected subject {subject}")
-
-    print(f"args.subject: {str(args.subject)}")
     if not args.fake:
         kwargs = {'server_address': args.address, 'port': args.port}
     else:
@@ -879,6 +872,9 @@ if __name__ == "__main__":
         generator = OpenIrisClientGenerator(gs, args.address, args.port)
 
 
+    # set state to running
+    gs.is_running = True
+
     # start calibrator server if specified
     calibrator_comm_thread = None
     calibrator_ana_thread = None
@@ -899,7 +895,6 @@ if __name__ == "__main__":
     # start data pipeline
     dp_thread = Thread(target=DataPipeline(gs, generator).run, args=(False,))
     dp_thread.start()
-    gs.is_running = True
 
     dp_thread.join()
     if args.cal_port:
