@@ -152,10 +152,8 @@ class GlobalState:
 
         # if args not passed, load using current values
         if subject:
-            print(f"subject {subject}")
             self.subject = subject
         if basename:
-            print(f"basename {basename}")
             self.basename = basename
 
         # check if config path and file exist. If not, create them.
