@@ -1,5 +1,4 @@
 import os
-import wmi
 import xmltodict
 import pprint
 import logging
@@ -19,6 +18,7 @@ class EyeTrackerSettings:
         # if tracker folder is not specified, look for exe to find it
         self.tracker_folder = tracker_folder
         if not self.tracker_folder:
+            import wmi      # Windows only - needed only to locate a running OpenIris.exe
             c = wmi.WMI()
             for process in c.Win32_Process(Name="OpenIris.exe"):
                 if process.ExecutablePath:
