@@ -17,9 +17,9 @@ python gui.py --fake                 # run with simulated eye data (no OpenIrisD
 python gui.py --address <ip> --port 9003 --cal-port 9292 --subject <name>
 ```
 
-Key `gui.py` CLI args: `--fake` (use `FakeOpenIrisClientGenerator` instead of a live OpenIrisDPI UDP connection), `--address`/`--port` (OpenIrisDPI server), `--cal-port` (TCP port for the external calibrator protocol, see below), `--fps`/`--eye` (override auto-detected capture rate / calibration eye), `--tracker-folder` (location of `EyeTrackerSettings.xml`, otherwise auto-discovered via a running `OpenIris.exe` process), `--subject` (selects the config file).
+Key `gui.py` CLI args: `--fake` (use `FakeEyeDataGenerator` instead of a live OpenIrisDPI UDP connection; `--fake-speed`, `--fake-cr-noise`, `--fake-dpi-noise` tune it), `--address`/`--port` (OpenIrisDPI server), `--cal-port` (TCP port for the external calibrator protocol, see below), `--fps`/`--eye` (override auto-detected capture rate / calibration eye), `--tracker-folder` (location of `EyeTrackerSettings.xml`, otherwise auto-discovered via a running `OpenIris.exe` process), `--subject` (selects the config file).
 
-To develop without real DAC hardware, set `DAC_BACKEND=nodac` (default is `dac`). This swaps in `nodac.py`'s `FakeModule`/`discover_ao_modules`/`DIO_Read8` in place of `dac.py`'s AIOUSB/NI-DAQmx code, in both `globalstate.py` and `diothread.py`.
+To develop without real DAC hardware, set `DAC_BACKEND=nodac` (default is `dac` on Windows, `nodac` elsewhere). `--fake` needs no tracker: it skips `EyeTrackerSettings` and defaults to 500 fps / Left eye unless `--fps`/`--eye` are given, so `python gui.py --fake` runs on Linux/macOS. This swaps in `nodac.py`'s `FakeModule`/`discover_ao_modules`/`DIO_Read8` in place of `dac.py`'s AIOUSB/NI-DAQmx code, in both `globalstate.py` and `diothread.py`.
 
 Standalone utility entry points (each has its own `if __name__ == "__main__":`):
 - `globalstate.py --subject X --basename Y` — create/load/save a subject's config file.
@@ -41,7 +41,7 @@ Standalone utility entry points (each has its own `if __name__ == "__main__":`):
 
 **Data model (`open_iris_client.py`)**: `OpenIrisClient` is a UDP client speaking OpenIrisDPI's simple text protocol (`"getdata"` / `"WAITFORDATA"` request, JSON response). `EyesData`/`EyeData`/`ExtraData` parse that JSON into the dataclasses used everywhere else; `Point` is a thin 2-vector wrapper (numpy-backed) with `+`, `-`, `*`, `rotate()`, `clip()`. `CRs[0]` is the primary corneal reflection, `CRs[3]` is P4 (used for DPI tracking); missing CRs are reported via `cr_error`/`p4_error` rather than raising.
 
-**`generator.py`** provides `EyeDataGenerator` implementations that `DataPipeline` consumes: `OpenIrisClientGenerator` (real UDP stream), `FakeOpenIrisClientGenerator`/`FakeEyeDataGenerator` (synthetic data for dev without the tracker — the latter can also replay a pickled fake-calibration recording), and `FileEyeDataGenerator` (replays a pickle of recorded `EyesData` frames, e.g. the files under `usrey-selected/`).
+**`generator.py`** provides `EyeDataGenerator` implementations that `DataPipeline` consumes: `OpenIrisClientGenerator` (real UDP stream), `FakeEyeDataGenerator` (standalone synthetic left-eye data: gaze follows a constant-speed Lissajous path, or the fixation point while calibrating; pupil/CR/P4 are produced by inverting the current `left_cal`/`left_dpi`, with separate CR/DPI noise in degrees), `FakeOpenIrisClientGenerator` (older: overwrites frames from a live server; unused by the GUI), and `FileEyeDataGenerator` (replays a pickle of recorded `EyesData` frames, e.g. the files under `usrey-selected/`).
 
 **DAC abstraction (`dac_common.py`, `dac.py`, `nodac.py`)**: `AnalogModule` is the hardware-agnostic base (voltage range, per-channel write); `AnalogOutput`/`AnalogOutputPair` wrap one or two channels with a `.write()`/`.v_out`. `dac.py` implements `AIOModule` (wraps the `AIOUSB.py` ctypes bindings for AccesIO USB-AO boards) and partial NI-DAQmx support, and asserts `os.name == 'nt'`. `nodac.py` implements `FakeModule`, a pure-Python stand-in with the same interface, used when `DAC_BACKEND=nodac`.
 
