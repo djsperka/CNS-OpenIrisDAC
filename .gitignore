@@ -5,3 +5,7 @@ build
 dist
 *.spec
 *.pkl
+*.xy
+settings.json
+CNS-OpenIrisDAC.code-workspace
+.python-version
