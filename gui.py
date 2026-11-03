@@ -456,11 +456,6 @@ class GUI:
         dd_col = sg.Column(
             [[sg.Text('CR', font=header_font)]] +
             [[f.get_layout()] for f in self.cr_fields] +
-            # [self.lbx.get_layout()],
-            # [self.lby.get_layout()],
-            # [self.lgx.get_layout()],
-            # [self.lgy.get_layout()],
-            # [self.lr.get_layout()],
             [[sg.Button(' Zero ', key='left_zero', enable_events=True, button_color='DodgerBlue')]] +
             [[sg.Text('PUPIL', font=header_font)]] +
             [[self.plb.get_layout()]] +
