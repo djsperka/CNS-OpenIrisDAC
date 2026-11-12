@@ -341,7 +341,7 @@ class GUI:
 
         # move pupil tab first
         self.pupil_bias_factor = 1
-        self.pupil_gain_factor = 1
+        self.pupil_gain_factor = 1e-5
         # self.plb = GUIField(
         #     'LPupil Bias', 'left_pupil_bias', field_size, 
         #     self.state.pupil_cal, 'x_bias', gain_factor=self.pupil_bias_factor, 
