@@ -21,7 +21,6 @@ class CalibratorComm(Thread):
         self.server_socket = None
         self.client_socket = None
         self.running = False
-        self.recording = False
 
     def run(self):
         """Run the TCP server loop, accepting and handling connections."""
@@ -131,7 +130,10 @@ class CalibratorComm(Thread):
         Parse and execute a command.
         
         Supported commands:
-        - "q": Query command
+        - "calstart" / "calstop": start/stop calibration
+        - "recstart [prefix]": start binary data recording (prefix defaults to the GUI prefix)
+        - "recstop": stop binary data recording
+        - "X": fixation point off
         - "F <arg1>": F command with a single argument formatted "x,y,d,c" (x,y,d numeric, c string)
         - "V <vpdx>,<vpdy>": V command with two numeric values between 0 and 5
         
@@ -151,6 +153,18 @@ class CalibratorComm(Thread):
         elif command.lower().startswith("calstop"):
             logger.info("Received calstop.")
             self.state.calibrating= False
+        elif command.lower().startswith("recstart"):
+            parts = command.split(maxsplit=1)
+            prefix = parts[1].strip() if len(parts) > 1 else None
+            try:
+                path = self.state.start_recording(prefix)
+                logger.info(f"recstart: recording to {path}")
+            except Exception as e:
+                logger.error(f"recstart failed: {e}")
+                return f"ERROR: {e}"
+        elif command.lower().startswith("recstop"):
+            logger.info("Received recstop.")
+            self.state.stop_recording()
         elif command.startswith("X"):
             self.state.calibration_fixation_on = False
         else:

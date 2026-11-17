@@ -449,7 +449,12 @@ class GUI:
             [sg.Text('', key='error', size=(20,1), text_color='red')],
             [self.graph],
             display_layout,
-            [self.cbmouse]
+            [self.cbmouse],
+            [sg.Frame('Recording', [
+                [sg.Text('Prefix: '), sg.Input(self.state.recording_prefix, key='rec-prefix', size=(15,1), enable_events=True),
+                 sg.Button('Start Recording', key='rec-toggle', enable_events=True, size=(15,1))],
+                [sg.Text('Not recording', key='rec-status', size=(50,1))]
+                ])]
             ])
 
         # this transform is used for converting raw mouse coordinates, which are in canvas pixel coordinates, into 
@@ -491,6 +496,8 @@ class GUI:
         self.output_list = list(self.state.output_dict.keys())
         self.output_list.insert(0, 'None')
         settings_layout = [
+            [sg.Text('Data folder: '), sg.Input(self.state.recording_folder, key='rec-folder', size=(50,1), enable_events=True),
+             sg.FolderBrowse(initial_folder=self.state.recording_folder)],
             [sg.Text('Channels: ')],
 
             # find each output list key in self.state.output_dict.keys()
@@ -562,6 +569,11 @@ class GUI:
                 self.update_output_channels()
                 self.update_sliders()
                 first = False
+                # start recording requested on command line, now that config is loaded
+                if self.state.pending_record_prefix:
+                    prefix = self.state.pending_record_prefix
+                    self.state.pending_record_prefix = None
+                    self.start_recording(prefix)
             if verbose and event != sg.TIMEOUT_EVENT:
                 logger.info(event, values)
 
@@ -571,9 +583,21 @@ class GUI:
 
             # handle exit
             if event == sg.WIN_CLOSED or event == 'Close' or event == 'Exit':
+                self.state.stop_recording()
                 self.maybe_save_config()
                 self.state.is_running = False
                 break
+
+            # Recording controls
+            if event == 'rec-prefix':
+                self.state.recording_prefix = values['rec-prefix'].strip()
+            if event == 'rec-folder':
+                self.state.recording_folder = values['rec-folder']
+            if event == 'rec-toggle':
+                if self.state.recorder.recording:
+                    self.state.stop_recording()
+                else:
+                    self.start_recording(values['rec-prefix'].strip())
 
             # Save config
             if event == 'Save Config':
@@ -648,7 +672,9 @@ class GUI:
                 pass
 
             # Load config
-            if event == 'Load Config':
+            if event == 'Load Config' and self.state.recorder.recording:
+                sg.popup_error('Stop recording before loading a new config.', title='Recording in progress')
+            elif event == 'Load Config':
 
                 subject = GlobalState.select_subject()
                 logger.info(f"Got subject {subject}")
@@ -697,6 +723,7 @@ class GUI:
 
             # update graph and errors on timeout (refresh)
             if event == sg.TIMEOUT_EVENT:
+                self.update_recording_status()
                 self.update_graph()
                 self.update_calibration_graphs()    # TEMP HACK
 
@@ -706,6 +733,26 @@ class GUI:
                     self.window['error'].update(value = error, text_color='red')
                 else:
                     self.window['error'].update(value = 'Tracking', text_color='lawn green')
+
+    def start_recording(self, prefix:str):
+        """Start a recording, reporting any failure to the user."""
+        try:
+            self.state.start_recording(prefix)
+        except Exception as e:
+            logger.error(f"Cannot start recording: {e}")
+            sg.popup_error(f"Cannot start recording:\n{e}", title='Recording error')
+        self.update_recording_status()
+
+    def update_recording_status(self):
+        """Refresh recording button/status; recording may be started/stopped by calibrator or command line."""
+        rec = self.state.recorder
+        if rec.recording:
+            self.window['rec-toggle'].update(text='Stop Recording', button_color=('white', 'red'))
+            self.window['rec-status'].update(f"Recording {rec.current_path.name} : {rec.frames_written} frames")
+        else:
+            self.window['rec-toggle'].update(text='Start Recording', button_color=sg.theme_button_color())
+            last = f" (last: {rec.current_path.name}, {rec.frames_written} frames)" if rec.current_path else ''
+            self.window['rec-status'].update(f"Not recording{last}")
 
     def maybe_save_config(self) -> bool:
         """If config settings changed since last load/save, ask user whether to save them.
@@ -842,9 +889,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
 
-    # Single input argument (optional) is filename to write output to.
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", help="File to write output to", type=str, default='')
     parser.add_argument("--fake", help="Use fake data generator instead of OpenIrisClient", action='store_true')
     parser.add_argument("--fake-speed", help="Fake data: gaze speed along Lissajous path, deg/s", type=float, default=2.0)
     parser.add_argument("--fake-cr-noise", help="Fake data: CR noise amplitude, deg", type=float, default=0.05)
@@ -856,6 +901,7 @@ if __name__ == "__main__":
     parser.add_argument("--eye", help="Eye to calibrate from. If single camera, configure it correctly. If dual, then this must be specified.", type=str, default='')
     parser.add_argument("--tracker-folder", help="Folder with the EyeTrackerSettings.xml file", type=str, default='')
     parser.add_argument("--subject", help="Current subject (part of path to config file)", type=str, default=None)
+    parser.add_argument("--record", help="Start recording binary data at startup, using this filename prefix", type=str, default=None, metavar='PREFIX')
     args = parser.parse_args()
 
     if not args.fake:
@@ -893,6 +939,7 @@ if __name__ == "__main__":
 
     # set state to running
     gs.is_running = True
+    gs.pending_record_prefix = args.record
 
     # start calibrator server if specified
     calibrator_comm_thread = None
@@ -916,6 +963,7 @@ if __name__ == "__main__":
     dp_thread.start()
 
     dp_thread.join()
+    gs.stop_recording()
     if args.cal_port:
         calibrator_comm_thread.stop()
         calibrator_comm_thread.join()

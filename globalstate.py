@@ -8,6 +8,7 @@ from queue import Queue
 import logging
 import tomlkit
 from tomlkit.exceptions import NonExistentKey
+from recorder import DataRecorder
 logger = logging.getLogger("GlobalState")
 
 DAC_BACKEND = os.environ.get('DAC_BACKEND', 'dac' if os.name == 'nt' else 'nodac')
@@ -78,6 +79,11 @@ class GlobalState:
         self.calibration_increase_step_sec:int = 300
         self.calibration_queue:Queue=Queue()
 
+        # binary data recording. recording_folder is saved in config; prefix is not.
+        self.recorder = DataRecorder()
+        self.recording_prefix = 'data'
+        self.pending_record_prefix = None   # set from command line; started once config is loaded
+
         # These are parameters from the config file. Create default/dummy values here, will be overwritten
         # by loaded config file. If no config file exists, these values will be written to a new config file.
         self.left_cal = CalibrationParameters(-60,180,-.013,.013,0)
@@ -96,6 +102,7 @@ class GlobalState:
         self.pupil_x_channel = 'USB-AO16-8E-ch5'
         self.left_dpi_x_channel = 'None'
         self.left_dpi_y_channel = 'None'
+        self.recording_folder = str(Path(__file__).resolve().parent)
 
         # serialized config as of last load/save; used by config_changed()
         self._saved_config_str = None
@@ -189,6 +196,10 @@ class GlobalState:
             self.left_dpi_y_channel = cfg['output']['left_dpi_y_channel']
         except NonExistentKey:
             pass
+        try:
+            self.recording_folder = str(cfg['recording']['folder'])
+        except NonExistentKey:
+            pass
 
         # snapshot of state as loaded, for change detection
         self._saved_config_str = tomlkit.dumps(self._build_config())
@@ -220,7 +231,22 @@ class GlobalState:
         output.add('left_dpi_x_channel', self.left_dpi_x_channel)
         output.add('left_dpi_y_channel', self.left_dpi_y_channel)
         cfg.add('output', output)
+        recording = tomlkit.table()
+        recording.add('folder', self.recording_folder)
+        cfg.add('recording', recording)
         return cfg
+
+    def start_recording(self, prefix:str|None = None) -> Path:
+        """Start a binary recording in recording_folder. Uses recording_prefix if prefix not given.
+        A copy of the current (possibly unsaved) config is written alongside the data file.
+        Raises on failure (already recording, bad folder, file exists)."""
+        if not prefix:
+            prefix = self.recording_prefix
+        return self.recorder.start(Path(self.recording_folder), prefix, self._build_config(),
+                                   capture_fps=self.capture_fps, eye=self.calibration_eye)
+
+    def stop_recording(self):
+        self.recorder.stop()
 
     def save_config(self):
         cfg = self._build_config()

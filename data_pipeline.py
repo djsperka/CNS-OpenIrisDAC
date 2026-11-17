@@ -40,6 +40,9 @@ class DataPipeline:
                 with in_cal_lock:
                     self.state.calibration_frames_in += 1
 
+            # record raw frame (with any calibration values stamped into extra) if recording is on
+            self.state.recorder.write(data)
+
             # write voltage output
             # The 'calibration_eye' value is taken from the settings file (see EyeTrackerSettings usage in gui.py).
             # If mouse mode is active and 'Both' eyes are tracked, both outputs are written as the mouse output.
