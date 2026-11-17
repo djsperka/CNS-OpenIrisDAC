@@ -571,8 +571,13 @@ class GUI:
 
             # handle exit
             if event == sg.WIN_CLOSED or event == 'Close' or event == 'Exit':
+                self.maybe_save_config()
                 self.state.is_running = False
                 break
+
+            # Save config
+            if event == 'Save Config':
+                self.state.save_config()
             
             # Update which signals are displayed on the main graph
             if event in ['display_cr', 'display_dpi']:
@@ -648,6 +653,7 @@ class GUI:
                 subject = GlobalState.select_subject()
                 logger.info(f"Got subject {subject}")
                 if subject:
+                    self.maybe_save_config()
                     self.state.load_config(subject=subject)
                     self.window.close()
                     self.window = self.make_window()
@@ -700,6 +706,19 @@ class GUI:
                     self.window['error'].update(value = error, text_color='red')
                 else:
                     self.window['error'].update(value = 'Tracking', text_color='lawn green')
+
+    def maybe_save_config(self) -> bool:
+        """If config settings changed since last load/save, ask user whether to save them.
+        Returns True if the config was saved."""
+        if not self.state.config_changed():
+            return False
+        answer = sg.popup_yes_no(f"Configuration for subject '{self.state.subject}' has changed.\nSave changes?",
+                                 title='Save config?')
+        if answer == 'Yes':
+            self.state.save_config()
+            return True
+        logger.info("Config changes discarded.")
+        return False
 
     def edit_points(self, measurements):
 
@@ -906,5 +925,4 @@ if __name__ == "__main__":
         dio_stop_event.set()
         dio_thread.join()
     gui_thread.join()
-    gs.save_config()
     

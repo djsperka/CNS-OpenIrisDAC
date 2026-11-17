@@ -97,7 +97,10 @@ class GlobalState:
         self.left_dpi_x_channel = 'None'
         self.left_dpi_y_channel = 'None'
 
-        # load calibration 
+        # serialized config as of last load/save; used by config_changed()
+        self._saved_config_str = None
+
+        # load calibration
         self.load_config()
 
         # see what kind of analog card we're using, prepare
@@ -187,9 +190,15 @@ class GlobalState:
         except NonExistentKey:
             pass
 
-    def save_config(self):
+        # snapshot of state as loaded, for change detection
+        self._saved_config_str = tomlkit.dumps(self._build_config())
 
-        # build the cfg object
+    def config_changed(self) -> bool:
+        """Return True if current config settings differ from those last loaded or saved."""
+        return tomlkit.dumps(self._build_config()) != self._saved_config_str
+
+    def _build_config(self) -> tomlkit.TOMLDocument:
+        """Build the tomlkit document representing the current config settings."""
         cfg = tomlkit.document()
         calibration = tomlkit.table()
         calibration.add('before_sec', self.calibration_before_sec)
@@ -211,9 +220,13 @@ class GlobalState:
         output.add('left_dpi_x_channel', self.left_dpi_x_channel)
         output.add('left_dpi_y_channel', self.left_dpi_y_channel)
         cfg.add('output', output)
+        return cfg
 
+    def save_config(self):
+        cfg = self._build_config()
         with self.config_file.open(mode='w') as fp:
             tomlkit.dump(cfg, fp)
+        self._saved_config_str = tomlkit.dumps(cfg)
         logger.info(f"Config file {str(self.config_file)} saved.")
 
 
