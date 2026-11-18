@@ -242,7 +242,7 @@ ___
 
 # LICENSE
 
-See the [LICENSE](LICENSE) file in this repository.
+See the [LICENSE](LICENSE.md) file in this repository.
 
 ___
 
