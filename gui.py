@@ -10,6 +10,7 @@ import PySimpleGUI as sg
 from platformdirs import PlatformDirs
 from pathlib import Path
 import copy
+import os
 import numpy as np
 import argparse
 import time
@@ -18,6 +19,11 @@ from globalstate import GlobalState
 import logging
 from shared_resources import cal_lock
 from dac_common import CalibrationParameters
+
+# Window/taskbar icon (generated from icon.svg). Tk on non-Windows platforms
+# can't load .ico files, so only use it on Windows.
+_icon_file = Path(__file__).resolve().parent / 'icon.ico'
+ICON_PATH = str(_icon_file) if _icon_file.exists() and os.name == 'nt' else None
 
 logger = logging.getLogger(__name__)
 MAIN_GRAPH_CANVAS_SIZE = (600, 600)
@@ -541,7 +547,7 @@ class GUI:
             [sg.StatusBar('Status', key='statusbar', size=(100,1))]
         ]
 
-        window = sg.Window('OpenIrisClient', self.layout, finalize=True)
+        window = sg.Window('OpenIrisClient', self.layout, finalize=True, icon=ICON_PATH)
         return window
 
     def window_loop(self, verbose=False, subject=None):
@@ -818,7 +824,7 @@ class GUI:
             return n
 
         layout = [[graph],buttons]
-        window = sg.Window("Edit points", layout, finalize=True, margins=(0,0))
+        window = sg.Window("Edit points", layout, finalize=True, margins=(0,0), icon=ICON_PATH)
         self.update_raw_graph(graph, tmpmeas )
         bDirty = True
         selected_list=[]

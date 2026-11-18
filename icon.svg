@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CNS-OpenIrisDAC icon: an eye whose iris is an analog voltmeter dial. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>CNS-OpenIrisDAC</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d3557"/>
+      <stop offset="1" stop-color="#0b1a2e"/>
+    </linearGradient>
+    <radialGradient id="sclera" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0.6" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d6dde6"/>
+    </radialGradient>
+    <radialGradient id="iris" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5fd3c6"/>
+      <stop offset="0.7" stop-color="#2a9d8f"/>
+      <stop offset="1" stop-color="#1b5e57"/>
+    </radialGradient>
+    <clipPath id="eyeClip">
+      <path d="M24,128 Q128,32 232,128 Q128,224 24,128 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background tile -->
+  <rect x="8" y="8" width="240" height="240" rx="44" fill="url(#bg)"/>
+
+  <!-- Eye -->
+  <path d="M24,128 Q128,32 232,128 Q128,224 24,128 Z" fill="url(#sclera)"/>
+  <g clip-path="url(#eyeClip)">
+    <circle cx="128" cy="128" r="50" fill="url(#iris)"/>
+    <circle cx="128" cy="128" r="50" fill="none" stroke="#123f3a" stroke-width="3"/>
+  </g>
+  <path d="M24,128 Q128,32 232,128 Q128,224 24,128 Z" fill="none"
+        stroke="#0b1a2e" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- Analog meter dial drawn over the iris -->
+  <!-- scale arc, -150deg to -30deg, r=40 -->
+  <path d="M93.36,108 A40,40 0 0 1 162.64,108" fill="none"
+        stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <!-- red over-range zone -->
+  <path d="M156.28,99.72 A40,40 0 0 1 162.64,108" fill="none"
+        stroke="#e63946" stroke-width="5" stroke-linecap="round"/>
+  <!-- ticks: major every 30deg, minor every 15deg -->
+  <g stroke="#ffffff" stroke-linecap="round">
+    <g stroke-width="3">
+      <line x1="128" y1="88" x2="128" y2="76" transform="rotate(-60 128 128)"/>
+      <line x1="128" y1="88" x2="128" y2="76" transform="rotate(-30 128 128)"/>
+      <line x1="128" y1="88" x2="128" y2="76"/>
+      <line x1="128" y1="88" x2="128" y2="76" transform="rotate(30 128 128)"/>
+      <line x1="128" y1="88" x2="128" y2="76" transform="rotate(60 128 128)"/>
+    </g>
+    <g stroke-width="2">
+      <line x1="128" y1="88" x2="128" y2="81" transform="rotate(-45 128 128)"/>
+      <line x1="128" y1="88" x2="128" y2="81" transform="rotate(-15 128 128)"/>
+      <line x1="128" y1="88" x2="128" y2="81" transform="rotate(15 128 128)"/>
+      <line x1="128" y1="88" x2="128" y2="81" transform="rotate(45 128 128)"/>
+    </g>
+  </g>
+
+  <!-- Pupil (doubles as the needle pivot housing) -->
+  <circle cx="128" cy="128" r="17" fill="#0a0a0a"/>
+
+  <!-- Needle -->
+  <g transform="rotate(28 128 128)">
+    <path d="M128,82 L131,128 L125,128 Z" fill="#e63946"/>
+    <line x1="128" y1="128" x2="128" y2="140" stroke="#e63946" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <circle cx="128" cy="128" r="5" fill="#e63946"/>
+  <circle cx="128" cy="128" r="2" fill="#0a0a0a"/>
+
+  <!-- Corneal glint -->
+  <circle cx="108" cy="110" r="5" fill="#ffffff" opacity="0.85"/>
+</svg>

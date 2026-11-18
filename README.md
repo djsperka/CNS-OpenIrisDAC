@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="icon.svg" alt="CNS-OpenIrisDAC icon: an eye whose iris is an analog meter dial" width="128" height="128">
+</p>
+
+<h1 align="center">CNS-OpenIrisDAC</h1>
+
 # GENERAL INFORMATION
 
 **CNS-OpenIrisDAC:** This project is a fork of [OpenIrisDAC](https://github.com/ryan-ressmeyer/OpenIrisDAC). It is modified to work in the environment of the [Usrey Lab](https://usreyneuroscience.ucdavis.edu/) at the UC Davis Center for Neuroscience ([CNS](https://neuroscience.ucdavis.edu/)).
@@ -35,6 +41,7 @@ Each signal has its own calibration (x/y bias, x/y gain, rotation). You can adju
 | `recorder.py` | Binary data recording, plus a reader for the recorded files. |
 | `dac_common.py`, `dac.py`, `nodac.py` | DAC abstraction: AccesIO USB / NI-DAQmx hardware, and a no-hardware stand-in. |
 | `eye_tracker_settings.py` | Reads OpenIrisDPI's `EyeTrackerSettings.xml` to detect frame rate and tracked eye. |
+| `icon.svg`, `icon.ico` | Application icon. `icon.svg` is the source; `icon.ico` (16–256 px) is used for the GUI windows on Windows. |
 
 ___
 
